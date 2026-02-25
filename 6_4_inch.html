@@ -377,13 +377,19 @@
         function clearSlot() {
             if (!activeSlot) return;
             const id = activeSlot.dataset.id;
-            const img = activeSlot.querySelector('img.canvas-img');
-            img.src = "";
-            img.style.display = "none";
-            
-            const placeholder = activeSlot.querySelector('.placeholder');
-            if(placeholder) placeholder.style.display = "flex";
-            
+            const isMain = id === 'main';
+
+            if (isMain) {
+                const img = activeSlot.querySelector('img.canvas-img');
+                img.src = "";
+                img.style.display = "none";
+
+                const placeholder = activeSlot.querySelector('.placeholder');
+                if (placeholder) placeholder.style.display = "flex";
+            } else {
+                activeSlot.remove();
+            }
+
             photoStates.delete(id);
             deselectAll({ target: document.querySelector('.canvas-viewport') });
         }
