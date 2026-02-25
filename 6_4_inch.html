@@ -105,9 +105,14 @@
             display: none; flex-direction: column;
         }
         
+        #cropSizer {
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
         #cropWrapper {
             position: relative;
-            transform-origin: center center;
+            transform-origin: top left;
             background: #111;
         }
 
@@ -241,9 +246,11 @@
             <button onclick="applyCrop()" class="bg-blue-600 text-white px-5 py-2 rounded-full text-xs font-bold">保存</button>
         </div>
         <div class="flex-1 flex items-center justify-center overflow-hidden p-4" id="cropViewport">
-            <div id="cropWrapper">
-                <img id="cropPreviewImg" src="" draggable="false">
-                <div id="cropBox"></div>
+            <div id="cropSizer">
+                <div id="cropWrapper">
+                    <img id="cropPreviewImg" src="" draggable="false">
+                    <div id="cropBox"></div>
+                </div>
             </div>
         </div>
         <div class="p-8 bg-zinc-950 safe-bottom">
@@ -415,11 +422,16 @@
             wrapper.style.width = w + 'px';
             wrapper.style.height = h + 'px';
 
-            // 视口适配
+            // 视口适配：wrapper scales from top-left, sizer holds the visual footprint
             const screenW = window.innerWidth * 0.85;
             const screenH = window.innerHeight * 0.5;
             viewScale = Math.min(screenW / w, screenH / h);
+            wrapper.style.width = w + 'px';
+            wrapper.style.height = h + 'px';
             wrapper.style.transform = `scale(${viewScale})`;
+            const sizer = document.getElementById('cropSizer');
+            sizer.style.width = Math.round(w * viewScale) + 'px';
+            sizer.style.height = Math.round(h * viewScale) + 'px';
             // Compensate border for wrapper scale so it always appears 1px visually
             document.getElementById('cropBox').style.borderWidth = (1 / viewScale).toFixed(2) + 'px';
 
