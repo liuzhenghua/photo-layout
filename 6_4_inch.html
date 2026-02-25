@@ -2,191 +2,269 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>6x4寸照片排版工具</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>6x4 横版精修排版工具</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
+        :root {
+            --canvas-w: 900px;
+            --canvas-h: 600px;
+            --sub-w: 160px;
+            --sub-h: 120px;
+        }
+
+        body { 
+            touch-action: manipulation; 
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior-y: contain;
+        }
+
+        /* 视口与缩放器 */
         .canvas-viewport {
             width: 100%;
-            overflow: auto;
             display: flex;
             justify-content: center;
-            padding: 40px 0;
+            align-items: center; /* 垂直居中 */
+            padding: 20px 10px;
             background: #f8fafc;
-            touch-action: none; /* 防止页面在操作画布时滚动 */
+            min-height: calc(100vh - 160px);
+            overflow: hidden;
         }
+
+        .canvas-scaler {
+            transform-origin: center center; /* 横版中心缩放视觉更好 */
+            transition: transform 0.2s ease;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+        }
+
         .photo-canvas {
-            width: 900px;
-            height: 600px;
-            min-width: 900px;
-            min-height: 600px;
+            width: var(--canvas-w);
+            height: var(--canvas-h);
             background: #fff;
-            box-shadow: 0 0 40px rgba(0,0,0,0.1);
             position: relative;
             overflow: hidden;
         }
+
+        /* 背景大图 Slot */
         .main-slot {
-            position: absolute;
-            top: 0; left: 0; width: 900px; height: 600px;
-            overflow: hidden; background: #f1f5f9;
+            position: absolute; inset: 0;
+            background: #f1f5f9;
+            overflow: hidden;
             cursor: pointer;
+            z-index: 1;
         }
-        .main-slot.active { outline: 4px solid #3b82f6; z-index: 5; }
         
+        .main-slot .placeholder {
+            position: absolute; inset: 0;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            color: #cbd5e1; pointer-events: none;
+        }
+
+        /* 小相框 Slot */
         .sub-slot-frame {
             position: absolute;
             background: #fff;
             box-shadow: 0 8px 24px rgba(0,0,0,0.15);
             z-index: 10;
             cursor: move;
-            padding: 2px;
-            transition: outline 0.2s;
+            padding: 3px;
+            transition: box-shadow 0.2s;
             touch-action: none;
         }
-        .sub-slot-frame.active { outline: 4px solid #3b82f6; z-index: 50; }
+
+        .sub-slot-frame.active {
+            box-shadow: 0 0 0 4px #3b82f6, 0 15px 35px rgba(0,0,0,0.25);
+            z-index: 100 !important;
+        }
 
         .sub-image-container {
-            width: 160px;
-            height: 120px;
-            overflow: hidden;
+            width: var(--sub-w);
+            height: var(--sub-h);
             background: #e2e8f0;
+            overflow: hidden;
             position: relative;
         }
 
-        .slot img {
+        /* 通用图片样式 */
+        img.canvas-img {
             position: absolute;
             top: 0; left: 0;
-            transform-origin: center center; 
+            transform-origin: center center;
             pointer-events: none;
             display: none;
-            will-change: transform;
             max-width: none !important;
             max-height: none !important;
         }
 
-        .slot-label {
-            color: #94a3b8; font-size: 14px; pointer-events: none;
-            position: absolute; width: 100%; text-align: center;
-            top: 50%; transform: translateY(-50%);
-        }
-
-        /* 裁剪弹窗样式 */
+        /* 裁剪弹窗 */
         .crop-modal {
-            position: fixed;
-            inset: 0;
-            background: #000;
-            z-index: 1000;
-            display: none;
-            flex-direction: column;
-            touch-action: none;
+            position: fixed; inset: 0;
+            background: #000; z-index: 1000;
+            display: none; flex-direction: column;
         }
-        .crop-viewport {
-            flex: 1;
-            position: relative;
-            overflow: hidden;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
+        
         #cropWrapper {
             position: relative;
             transform-origin: center center;
+            background: #111;
         }
+
         #cropBox {
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            border: 2px solid #fff;
-            box-shadow: 0 0 0 5000px rgba(0,0,0,0.85);
-            z-index: 20;
-            pointer-events: none; 
+            position: absolute; inset: 0;
+            border: 2px solid #3b82f6;
+            box-shadow: 0 0 0 5000px rgba(0,0,0,0.8);
+            z-index: 20; pointer-events: none;
         }
+
         #cropPreviewImg {
-            position: absolute;
-            top: 0; left: 0;
+            position: absolute; top: 0; left: 0;
+            cursor: move; touch-action: none;
             transform-origin: center center;
-            z-index: 10;
-            cursor: move;
-            will-change: transform;
-            pointer-events: auto;
             max-width: none !important;
             max-height: none !important;
-            touch-action: none;
         }
+
+        /* Loading */
+        #exportLoading {
+            display: none;
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.85);
+            z-index: 2000;
+            flex-direction: column;
+            align-items: center; justify-content: center;
+            color: white;
+            backdrop-filter: blur(5px);
+        }
+
+        .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 20px); }
+        
+        /* Range Input Style */
+        input[type=range] { -webkit-appearance: none; background: transparent; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; background: #333; border-radius: 2px; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; background: #3b82f6; margin-top: -8px; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
     </style>
 </head>
-<body class="bg-slate-50 min-h-screen overflow-x-hidden">
+<body class="bg-slate-50 min-h-screen flex flex-col">
 
-    <div class="pt-8 pb-4 text-center">
-        <h1 class="text-2xl font-bold text-slate-800">高清照片排版工具</h1>
-        <p class="text-slate-500 text-sm px-4">拖动相框调整位置，点击“裁剪编辑”调整缩放与角度</p>
-    </div>
+    <!-- 顶部导航 -->
+    <header class="bg-white/90 backdrop-blur sticky top-0 z-40 px-4 py-3 flex justify-between items-center border-b border-slate-200 shadow-sm">
+        <div>
+            <h1 class="text-sm font-bold text-slate-800">6x4 横版六联</h1>
+            <div class="flex items-center gap-2 mt-0.5">
+                <span class="text-[10px] text-slate-400">底图 6:4 | 小图 160x120</span>
+                <select id="exportQuality" class="text-[10px] bg-slate-100 border-none rounded px-1 py-0.5 font-bold text-blue-600 focus:ring-0">
+                    <option value="1">预览 (900x600)</option>
+                    <option value="2" selected>高清 (1800x1200 / 300DPI)</option>
+                    <option value="3">超清 (2700x1800 / 450DPI)</option>
+                </select>
+            </div>
+        </div>
+        <button onclick="exportPhoto()" class="bg-blue-600 text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-md active:scale-95 transition">导出</button>
+    </header>
 
-    <div class="canvas-viewport" id="viewport" onclick="deselectAll(event)">
-        <div id="capture-area" class="photo-canvas">
-            <div class="main-slot slot" data-id="main" onclick="selectSlot(this, 'main', event)">
-                <span class="slot-label">点击上传背景 (900x600)</span>
-            </div>
+    <!-- 主画布区域 -->
+    <main class="flex-1 canvas-viewport" onclick="deselectAll(event)">
+        <div id="scaler" class="canvas-scaler">
+            <div id="capture-area" class="photo-canvas">
+                
+                <!-- 背景大图 -->
+                <div class="main-slot" data-id="main" onclick="selectSlot(this, event)">
+                    <div class="placeholder">
+                        <svg class="w-16 h-16 mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                        <span class="text-sm font-bold uppercase tracking-widest">点击上传横版背景</span>
+                    </div>
+                    <img class="canvas-img" src="" alt="">
+                </div>
 
-            <div class="sub-slot-frame slot" style="top: 430px; left: 15px; transform: rotate(-3deg);" data-id="sub1" onclick="selectSlot(this, 'sub1', event)">
-                <div class="sub-image-container"></div>
+                <!-- 5个小相框 (保留原版位置参数) -->
+                <div class="sub-slot-frame" style="top: 430px; left: 15px; transform: rotate(-3deg);" data-id="sub1" onmousedown="startFrameDrag(this, event)" ontouchstart="startFrameDrag(this, event)">
+                    <div class="sub-image-container"><img class="canvas-img" src="" alt=""></div>
+                </div>
+                <div class="sub-slot-frame" style="top: 450px; left: 190px; transform: rotate(2deg);" data-id="sub2" onmousedown="startFrameDrag(this, event)" ontouchstart="startFrameDrag(this, event)">
+                    <div class="sub-image-container"><img class="canvas-img" src="" alt=""></div>
+                </div>
+                <div class="sub-slot-frame" style="top: 440px; left: 365px; transform: rotate(-1deg);" data-id="sub3" onmousedown="startFrameDrag(this, event)" ontouchstart="startFrameDrag(this, event)">
+                    <div class="sub-image-container"><img class="canvas-img" src="" alt=""></div>
+                </div>
+                <div class="sub-slot-frame" style="top: 455px; left: 540px; transform: rotate(3deg);" data-id="sub4" onmousedown="startFrameDrag(this, event)" ontouchstart="startFrameDrag(this, event)">
+                    <div class="sub-image-container"><img class="canvas-img" src="" alt=""></div>
+                </div>
+                <div class="sub-slot-frame" style="top: 435px; left: 715px; transform: rotate(-2deg);" data-id="sub5" onmousedown="startFrameDrag(this, event)" ontouchstart="startFrameDrag(this, event)">
+                    <div class="sub-image-container"><img class="canvas-img" src="" alt=""></div>
+                </div>
+
             </div>
-            <div class="sub-slot-frame slot" style="top: 450px; left: 190px; transform: rotate(2deg);" data-id="sub2" onclick="selectSlot(this, 'sub2', event)">
-                <div class="sub-image-container"></div>
-            </div>
-            <div class="sub-slot-frame slot" style="top: 440px; left: 365px; transform: rotate(-1deg);" data-id="sub3" onclick="selectSlot(this, 'sub3', event)">
-                <div class="sub-image-container"></div>
-            </div>
-            <div class="sub-slot-frame slot" style="top: 455px; left: 540px; transform: rotate(3deg);" data-id="sub4" onclick="selectSlot(this, 'sub4', event)">
-                <div class="sub-image-container"></div>
-            </div>
-            <div class="sub-slot-frame slot" style="top: 435px; left: 715px; transform: rotate(-2deg);" data-id="sub5" onclick="selectSlot(this, 'sub5', event)">
-                <div class="sub-image-container"></div>
-            </div>
+        </div>
+    </main>
+
+    <!-- 底部工具栏 -->
+    <div id="toolbar" class="fixed bottom-0 left-0 right-0 bg-white shadow-[0_-10px_40px_rgba(0,0,0,0.05)] translate-y-full transition-transform duration-300 z-50 border-t border-slate-100 safe-bottom">
+        <div class="flex justify-around p-4 items-center">
+            <button onclick="triggerUpload()" class="flex flex-col items-center gap-1 group w-14">
+                <div class="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center group-active:scale-90 transition">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                </div>
+                <span class="text-[10px] font-bold text-slate-500">换图</span>
+            </button>
+            
+            <button id="btnCrop" onclick="openCropModal()" class="flex flex-col items-center gap-1 group w-14 opacity-50 pointer-events-none transition-opacity">
+                <div class="w-10 h-10 bg-slate-50 text-slate-600 rounded-xl flex items-center justify-center group-active:scale-90 transition">
+                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 3v15M18 6v15M3 6h15M6 18h15"/></svg>
+                </div>
+                <span class="text-[10px] font-bold text-slate-500">裁剪</span>
+            </button>
+
+            <!-- 仅小相框显示的旋转按钮 -->
+            <button id="btnRotateFrame" onclick="rotateActiveFrame()" class="flex flex-col items-center gap-1 group w-14 hidden">
+                <div class="w-10 h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center group-active:scale-90 transition">
+                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                </div>
+                <span class="text-[10px] font-bold text-slate-500">转框</span>
+            </button>
+
+            <button onclick="clearSlot()" class="flex flex-col items-center gap-1 group w-14">
+                <div class="w-10 h-10 bg-red-50 text-red-500 rounded-xl flex items-center justify-center group-active:scale-90 transition">
+                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                </div>
+                <span class="text-[10px] font-bold text-slate-500">移除</span>
+            </button>
         </div>
     </div>
 
-    <div id="toolbar" class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur px-6 py-4 rounded-full shadow-2xl flex gap-4 md:gap-6 items-center opacity-0 pointer-events-none transition-all z-50">
-        <button onclick="triggerUpload()" class="flex flex-col items-center group">
-            <div class="p-2 bg-slate-100 group-hover:bg-blue-100 rounded-lg transition"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg></div>
-            <span class="text-[10px] mt-1 font-bold text-slate-600">换图</span>
-        </button>
-        
-        <button onclick="openCropModal()" class="flex flex-col items-center group">
-            <div class="p-2 bg-slate-100 group-hover:bg-blue-100 rounded-lg transition"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 3v15M18 6v15M3 6h15M6 18h15"/></svg></div>
-            <span class="text-[10px] mt-1 font-bold text-slate-600">裁剪编辑</span>
-        </button>
-
-        <div id="frameRotateBtn" class="flex flex-col items-center group cursor-pointer" onclick="rotateActiveFrame()">
-            <div class="p-2 bg-slate-100 group-hover:bg-blue-100 rounded-lg transition"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg></div>
-            <span class="text-[10px] mt-1 font-bold text-slate-600">旋转相框</span>
-        </div>
-
-        <div class="h-8 w-px bg-slate-200"></div>
-        
-        <button onclick="exportPhoto()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full font-bold text-sm transition">导出</button>
-    </div>
-
+    <!-- 裁剪弹窗 -->
     <div id="cropModal" class="crop-modal">
-        <div class="p-6 flex justify-between items-center border-b border-white/10">
-            <button onclick="closeCropModal()" class="text-white/70 hover:text-white">取消</button>
-            <span class="text-white font-bold tracking-wider">调整图片显示范围</span>
-            <button onclick="applyCrop()" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-bold transition">确认</button>
+        <div class="p-4 flex justify-between items-center bg-black/80 backdrop-blur safe-top">
+            <button onclick="closeCropModal()" class="text-white/40 text-sm px-2">取消</button>
+            <span class="text-white text-xs font-bold tracking-widest uppercase">编辑照片</span>
+            <button onclick="applyCrop()" class="bg-blue-600 text-white px-5 py-2 rounded-full text-xs font-bold">保存</button>
         </div>
-        <div class="crop-viewport" id="cropViewport">
+        <div class="flex-1 flex items-center justify-center overflow-hidden p-4" id="cropViewport">
             <div id="cropWrapper">
                 <img id="cropPreviewImg" src="" draggable="false">
                 <div id="cropBox"></div>
             </div>
         </div>
-        <div class="p-8 bg-zinc-900 space-y-6">
-            <div class="max-w-md mx-auto space-y-4">
-                <div class="flex justify-between text-xs text-zinc-400 font-bold uppercase"><span>图片缩放</span><span id="zoomLabel" class="text-blue-400">1.00x</span></div>
-                <input type="range" id="cropZoom" min="0.01" max="5" step="0.001" oninput="updateCropTransform()" class="w-full accent-blue-500 cursor-pointer">
-                <div class="flex justify-between text-xs text-zinc-400 font-bold uppercase pt-2"><span>图片旋转</span><span id="rotateLabel" class="text-blue-400">0°</span></div>
-                <input type="range" id="cropRotate" min="-180" max="180" step="1" oninput="updateCropTransform()" class="w-full accent-blue-500 cursor-pointer">
+        <div class="p-8 bg-zinc-950 safe-bottom">
+            <div class="max-w-xs mx-auto space-y-6">
+                <div>
+                    <div class="flex justify-between text-[10px] text-zinc-500 font-black mb-2"><span>缩放</span><span id="zoomLabel" class="text-blue-500">1.0X</span></div>
+                    <input type="range" id="cropZoom" min="0.1" max="3" step="0.01" oninput="updateCropTransform()">
+                </div>
+                <div>
+                    <div class="flex justify-between text-[10px] text-zinc-500 font-black mb-2"><span>旋转</span><span id="rotateLabel" class="text-blue-500">0°</span></div>
+                    <input type="range" id="cropRotate" min="-180" max="180" step="1" oninput="updateCropTransform()">
+                </div>
             </div>
         </div>
+    </div>
+
+    <!-- 导出 Loading -->
+    <div id="exportLoading">
+        <div class="animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent mb-4"></div>
+        <p class="text-sm font-medium">正在生成高清图片...</p>
+        <p class="text-[10px] text-zinc-400 mt-2">横版高精度渲染中</p>
     </div>
 
     <input type="file" id="fileInput" accept="image/*" class="hidden" onchange="handleFile(event)">
@@ -194,247 +272,279 @@
     <script>
         let activeSlot = null;
         const photoStates = new Map();
-        let frameDragging = false, startX, startY, fLeft, fTop, activeFrame;
-
+        
         let cropTemp = { x: 0, y: 0, scale: 1, rotate: 0, lastX: 0, lastY: 0, isDragging: false };
-        let currentViewportScale = 1;
+        let viewScale = 1;
+        
+        // 相框拖拽状态
+        let frameDragState = { isDragging: false, startX: 0, startY: 0, initialLeft: 0, initialTop: 0 };
 
         const LOGIC_W = { main: 900, sub: 160 };
         const LOGIC_H = { main: 600, sub: 120 };
 
-        function selectSlot(slot, id, e) {
+        // 自动缩放画布 (适配横版 900px)
+        function autoScaleCanvas() {
+            const container = document.querySelector('.canvas-viewport');
+            const scaler = document.getElementById('scaler');
+            const cw = container.clientWidth - 20; 
+            // 如果屏幕比 900px 小，就缩放；否则最大为 1.0 (防止电脑端过大)
+            const scale = Math.min(cw / 900, 1);
+            scaler.style.transform = `scale(${scale})`;
+        }
+        window.addEventListener('resize', autoScaleCanvas);
+        window.addEventListener('load', autoScaleCanvas);
+
+        function selectSlot(element, e) {
             if (e) e.stopPropagation();
             if (activeSlot) activeSlot.classList.remove('active');
-            activeSlot = slot;
+            
+            activeSlot = element;
             activeSlot.classList.add('active');
             
-            const tb = document.getElementById('toolbar');
-            tb.style.opacity = "1";
-            tb.style.pointerEvents = "auto";
-            tb.style.transform = "translate(-50%, 0)";
+            const id = activeSlot.dataset.id;
+            const isMain = id === 'main';
+            const hasImg = photoStates.has(id);
 
-            document.getElementById('frameRotateBtn').style.display = (id === 'main') ? 'none' : 'flex';
+            document.getElementById('toolbar').style.transform = "translateY(0)";
+            document.getElementById('btnRotateFrame').style.display = isMain ? 'none' : 'flex';
+            
+            const btnCrop = document.getElementById('btnCrop');
+            btnCrop.style.opacity = hasImg ? "1" : "0.5";
+            btnCrop.style.pointerEvents = hasImg ? "auto" : "none";
         }
 
         function deselectAll(e) {
-            if (e.target.id === 'capture-area' || e.target.classList.contains('canvas-viewport')) {
+            if (e.target.classList.contains('canvas-viewport') || e.target.id === 'capture-area') {
                 if (activeSlot) activeSlot.classList.remove('active');
                 activeSlot = null;
-                const tb = document.getElementById('toolbar');
-                tb.style.opacity = "0";
-                tb.style.pointerEvents = "none";
-                tb.style.transform = "translate(-50%, 20px)";
+                document.getElementById('toolbar').style.transform = "translateY(100%)";
             }
+        }
+
+        function triggerUpload() { 
+            document.getElementById('fileInput').value = ''; 
+            document.getElementById('fileInput').click(); 
+        }
+
+        function handleFile(event) {
+            const file = event.target.files[0];
+            if (!file || !activeSlot) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const id = activeSlot.dataset.id;
+                const type = id === 'main' ? 'main' : 'sub';
+                
+                let img = activeSlot.querySelector('img.canvas-img');
+                const placeholder = activeSlot.querySelector('.placeholder');
+                
+                img.src = e.target.result;
+                img.style.display = 'block';
+                if(placeholder) placeholder.style.display = 'none';
+
+                img.onload = () => {
+                    const w = LOGIC_W[type];
+                    const h = LOGIC_H[type];
+                    const fitScale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+                    
+                    const state = {
+                        x: (w - img.naturalWidth) / 2,
+                        y: (h - img.naturalHeight) / 2,
+                        scale: fitScale,
+                        rotate: 0
+                    };
+                    photoStates.set(id, state);
+                    applyImgStyle(img, state);
+                    
+                    document.getElementById('btnCrop').style.opacity = "1";
+                    document.getElementById('btnCrop').style.pointerEvents = "auto";
+                };
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function applyImgStyle(img, state) {
+            img.style.transform = `translate(${state.x}px, ${state.y}px) scale(${state.scale}) rotate(${state.rotate}deg)`;
+        }
+
+        function clearSlot() {
+            if (!activeSlot) return;
+            const id = activeSlot.dataset.id;
+            const img = activeSlot.querySelector('img.canvas-img');
+            img.src = "";
+            img.style.display = "none";
+            
+            const placeholder = activeSlot.querySelector('.placeholder');
+            if(placeholder) placeholder.style.display = "flex";
+            
+            photoStates.delete(id);
+            deselectAll({ target: document.querySelector('.canvas-viewport') });
         }
 
         function rotateActiveFrame() {
             if (!activeSlot || activeSlot.dataset.id === 'main') return;
             const style = window.getComputedStyle(activeSlot);
             const matrix = new DOMMatrixReadOnly(style.transform);
-            let currentAngle = Math.round(Math.atan2(matrix.b, matrix.a) * (180 / Math.PI));
-            let newAngle = currentAngle + 5;
-            activeSlot.style.transform = `rotate(${newAngle}deg)`;
+            let angle = Math.round(Math.atan2(matrix.b, matrix.a) * (180 / Math.PI));
+            activeSlot.style.transform = `rotate(${angle + 5}deg)`;
         }
 
-        function triggerUpload() { document.getElementById('fileInput').click(); }
-
-        function handleFile(event) {
-            const file = event.target.files[0];
-            if (!file || !activeSlot) return;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const id = activeSlot.dataset.id;
-                const type = id === 'main' ? 'main' : 'sub';
-                const container = activeSlot.querySelector('.sub-image-container') || activeSlot;
-                
-                let img = container.querySelector('img');
-                if (!img) {
-                    img = document.createElement('img');
-                    container.appendChild(img);
-                }
-                img.src = e.target.result;
-                img.onload = () => {
-                    img.width = img.naturalWidth;
-                    img.height = img.naturalHeight;
-                    img.style.display = 'block';
-                    const fitScale = Math.max(LOGIC_W[type] / img.naturalWidth, LOGIC_H[type] / img.naturalHeight);
-                    const state = {
-                        x: (LOGIC_W[type] - img.naturalWidth) / 2,
-                        y: (LOGIC_H[type] - img.naturalHeight) / 2,
-                        scale: fitScale,
-                        rotate: 0
-                    };
-                    photoStates.set(id, state);
-                    renderImg(img, state);
-                };
-            };
-            reader.readAsDataURL(file);
-            event.target.value = '';
-        }
-
-        function renderImg(img, state) {
-            img.style.transform = `translate(${state.x}px, ${state.y}px) scale(${state.scale}) rotate(${state.rotate}deg)`;
-        }
-
+        // --- 裁剪逻辑 ---
         function openCropModal() {
             if (!activeSlot) return;
-            const img = activeSlot.querySelector('img');
-            if (!img) return;
-
             const id = activeSlot.dataset.id;
-            const type = id === 'main' ? 'main' : 'sub';
+            if (!photoStates.has(id)) return triggerUpload();
+
             const state = photoStates.get(id);
+            const img = activeSlot.querySelector('img.canvas-img');
+            const type = id === 'main' ? 'main' : 'sub';
 
-            const modal = document.getElementById('cropModal');
             const preview = document.getElementById('cropPreviewImg');
-            const wrapper = document.getElementById('cropWrapper');
-
             preview.src = img.src;
-            preview.width = img.naturalWidth;
-            preview.height = img.naturalHeight;
+            
+            const wrapper = document.getElementById('cropWrapper');
+            const w = LOGIC_W[type];
+            const h = LOGIC_H[type];
+            wrapper.style.width = w + 'px';
+            wrapper.style.height = h + 'px';
 
-            wrapper.style.width = LOGIC_W[type] + 'px';
-            wrapper.style.height = LOGIC_H[type] + 'px';
-
+            // 视口适配
             const screenW = window.innerWidth * 0.85;
             const screenH = window.innerHeight * 0.5;
-            currentViewportScale = Math.min(screenW / LOGIC_W[type], screenH / LOGIC_H[type]);
-            wrapper.style.transform = `scale(${currentViewportScale})`;
+            viewScale = Math.min(screenW / w, screenH / h);
+            wrapper.style.transform = `scale(${viewScale})`;
 
             cropTemp = { ...state, isDragging: false };
-
-            const fitScale = Math.max(LOGIC_W[type] / img.naturalWidth, LOGIC_H[type] / img.naturalHeight);
-            const zs = document.getElementById('cropZoom');
-            zs.min = fitScale * 0.1;
-            zs.max = fitScale * 10;
-            zs.value = cropTemp.scale;
+            
+            const zoomSlider = document.getElementById('cropZoom');
+            const baseScale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+            zoomSlider.min = (baseScale * 0.5).toFixed(4);
+            zoomSlider.max = (baseScale * 5).toFixed(4);
+            zoomSlider.value = cropTemp.scale;
             document.getElementById('cropRotate').value = cropTemp.rotate;
 
             updateCropTransform();
-            modal.style.display = 'flex';
+            document.getElementById('cropModal').style.display = 'flex';
         }
 
         function updateCropTransform() {
-            cropTemp.scale = parseFloat(document.getElementById('cropZoom').value);
-            cropTemp.rotate = parseInt(document.getElementById('cropRotate').value);
-            
+            const newScale = parseFloat(document.getElementById('cropZoom').value);
+            const newRotate = parseInt(document.getElementById('cropRotate').value);
+            cropTemp.scale = newScale;
+            cropTemp.rotate = newRotate;
+
             const preview = document.getElementById('cropPreviewImg');
-            const id = activeSlot.dataset.id;
-            const type = id === 'main' ? 'main' : 'sub';
-            
-            const fitScale = Math.max(LOGIC_W[type] / preview.naturalWidth, LOGIC_H[type] / preview.naturalHeight);
-            document.getElementById('zoomLabel').innerText = (cropTemp.scale / fitScale).toFixed(2) + 'x';
-            document.getElementById('rotateLabel').innerText = cropTemp.rotate + '°';
-            
-            renderImg(preview, cropTemp);
+            preview.style.transform = `translate(${cropTemp.x}px, ${cropTemp.y}px) rotate(${cropTemp.rotate}deg) scale(${cropTemp.scale})`;
+
+            document.getElementById('zoomLabel').innerText = newScale.toFixed(2) + 'x';
+            document.getElementById('rotateLabel').innerText = newRotate + '°';
         }
 
         function applyCrop() {
             const id = activeSlot.dataset.id;
             const state = { x: cropTemp.x, y: cropTemp.y, scale: cropTemp.scale, rotate: cropTemp.rotate };
             photoStates.set(id, state);
-            renderImg(activeSlot.querySelector('img'), state);
+            applyImgStyle(activeSlot.querySelector('img.canvas-img'), state);
             closeCropModal();
         }
 
         function closeCropModal() { document.getElementById('cropModal').style.display = 'none'; }
 
-        // 统一处理坐标获取 (支持 Mouse 和 Touch)
-        function getCoords(e) {
-            if (e.touches && e.touches.length > 0) {
-                return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-            }
-            return { x: e.clientX, y: e.clientY };
+        // --- 拖拽事件 ---
+        function startFrameDrag(el, e) {
+            selectSlot(el, e);
+            const point = e.touches ? e.touches[0] : e;
+            frameDragState.isDragging = true;
+            frameDragState.startX = point.clientX;
+            frameDragState.startY = point.clientY;
+            frameDragState.initialLeft = el.offsetLeft;
+            frameDragState.initialTop = el.offsetTop;
         }
 
-        function onStart(e) {
-            const pos = getCoords(e);
-            
-            // 1. 裁剪预览图拖拽
-            if (e.target.id === 'cropPreviewImg') {
-                cropTemp.isDragging = true;
-                cropTemp.lastX = pos.x;
-                cropTemp.lastY = pos.y;
-                return;
-            }
-
-            // 2. 主界面相框拖拽
-            const frame = e.target.closest('.sub-slot-frame');
-            if (frame && document.getElementById('cropModal').style.display !== 'flex') {
-                activeFrame = frame;
-                frameDragging = true;
-                startX = pos.x; 
-                startY = pos.y;
-                fLeft = frame.offsetLeft; 
-                fTop = frame.offsetTop;
-                selectSlot(frame, frame.dataset.id);
-            }
+        function startCropDrag(e) {
+            const point = e.touches ? e.touches[0] : e;
+            cropTemp.isDragging = true;
+            cropTemp.lastX = point.clientX;
+            cropTemp.lastY = point.clientY;
         }
 
-        function onMove(e) {
-            const pos = getCoords(e);
+        function onGlobalMove(e) {
+            const point = e.touches ? e.touches[0] : e;
 
-            if (cropTemp.isDragging) {
-                cropTemp.x += (pos.x - cropTemp.lastX) / currentViewportScale;
-                cropTemp.y += (pos.y - cropTemp.lastY) / currentViewportScale;
-                cropTemp.lastX = pos.x;
-                cropTemp.lastY = pos.y;
-                updateCropTransform();
-            }
-
-            if (frameDragging && activeFrame) {
-                activeFrame.style.left = (fLeft + pos.x - startX) + 'px';
-                activeFrame.style.top = (fTop + pos.y - startY) + 'px';
-            }
-        }
-
-        function onEnd() {
-            cropTemp.isDragging = false;
-            frameDragging = false;
-        }
-
-        // 绑定事件 (鼠标)
-        document.addEventListener('mousedown', onStart);
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onEnd);
-
-        // 绑定事件 (触摸)
-        document.addEventListener('touchstart', onStart, { passive: false });
-        document.addEventListener('touchmove', (e) => {
-            // 在拖拽相框或图片时，阻止背景滚动
-            if (frameDragging || cropTemp.isDragging) {
+            if (cropTemp.isDragging && document.getElementById('cropModal').style.display === 'flex') {
                 e.preventDefault();
+                const dx = point.clientX - cropTemp.lastX;
+                const dy = point.clientY - cropTemp.lastY;
+                cropTemp.x += dx / viewScale;
+                cropTemp.y += dy / viewScale;
+                cropTemp.lastX = point.clientX;
+                cropTemp.lastY = point.clientY;
+                const preview = document.getElementById('cropPreviewImg');
+                preview.style.transform = `translate(${cropTemp.x}px, ${cropTemp.y}px) rotate(${cropTemp.rotate}deg) scale(${cropTemp.scale})`;
             }
-            onMove(e);
-        }, { passive: false });
-        document.addEventListener('touchend', onEnd);
+            else if (frameDragState.isDragging && activeSlot && activeSlot.dataset.id !== 'main') {
+                e.preventDefault();
+                const scaler = document.getElementById('scaler');
+                const canvasScale = parseFloat(window.getComputedStyle(scaler).transform.split(',')[3]) || 1;
+                const dx = (point.clientX - frameDragState.startX) / canvasScale;
+                const dy = (point.clientY - frameDragState.startY) / canvasScale;
+                activeSlot.style.left = (frameDragState.initialLeft + dx) + 'px';
+                activeSlot.style.top = (frameDragState.initialTop + dy) + 'px';
+            }
+        }
+
+        function onGlobalEnd() {
+            cropTemp.isDragging = false;
+            frameDragState.isDragging = false;
+        }
+
+        const cropImg = document.getElementById('cropPreviewImg');
+        cropImg.addEventListener('mousedown', startCropDrag);
+        cropImg.addEventListener('touchstart', startCropDrag, {passive: false});
+
+        document.addEventListener('mousemove', onGlobalMove);
+        document.addEventListener('touchmove', onGlobalMove, {passive: false});
+        document.addEventListener('mouseup', onGlobalEnd);
+        document.addEventListener('touchend', onGlobalEnd);
 
         async function exportPhoto() {
+            const loading = document.getElementById('exportLoading');
             const area = document.getElementById('capture-area');
+            const qualityScale = parseFloat(document.getElementById('exportQuality').value);
+            
+            loading.style.display = 'flex';
             const prevActive = activeSlot;
             if (activeSlot) activeSlot.classList.remove('active');
-            
-            try {
-                // 解决 iOS/Safari 可能出现的绘制白屏或偏移问题
-                window.scrollTo(0,0);
-                const canvas = await html2canvas(area, { 
-                    scale: 3, 
-                    useCORS: true,
-                    backgroundColor: '#ffffff',
-                    logging: false,
-                    allowTaint: true
-                });
-                
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-                const link = document.createElement('a');
-                link.download = `Photo_Layout_${Date.now()}.jpg`;
-                link.href = dataUrl;
-                link.click();
-            } catch (err) { 
-                console.error(err);
-                alert("导出失败，请尝试在电脑端操作"); 
-            }
-            finally { if (prevActive) prevActive.classList.add('active'); }
+
+            setTimeout(async () => {
+                try {
+                    const scaler = document.getElementById('scaler');
+                    const originalTransform = scaler.style.transform;
+                    scaler.style.transform = 'scale(1)'; // 还原比例进行截图
+
+                    const canvas = await html2canvas(area, {
+                        scale: qualityScale,
+                        useCORS: true,
+                        logging: false,
+                        backgroundColor: '#ffffff'
+                    });
+
+                    scaler.style.transform = originalTransform;
+
+                    const link = document.createElement('a');
+                    const dpiInfo = qualityScale === 2 ? 'HD' : (qualityScale === 3 ? 'UHD' : 'Preview');
+                    link.download = `Photo_6x4_Landscape_${dpiInfo}_${Date.now()}.jpg`;
+                    link.href = canvas.toDataURL('image/jpeg', 0.92);
+                    link.click();
+
+                } catch (err) {
+                    console.error(err);
+                    alert("导出失败，请降低画质重试");
+                } finally {
+                    if (prevActive) prevActive.classList.add('active');
+                    loading.style.display = 'none';
+                }
+            }, 100);
         }
     </script>
 </body>
