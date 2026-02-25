@@ -80,7 +80,7 @@
             pointer-events: none;
             max-width: none !important;
             max-height: none !important;
-            display: none; /* 初始隐藏，有图再显示 */
+            display: none;
         }
 
         .slot-placeholder {
@@ -123,6 +123,17 @@
             max-height: none !important;
         }
 
+        #exportLoading {
+            display: none;
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 2000;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+
         input[type=range] {
             -webkit-appearance: none;
             background: transparent;
@@ -143,7 +154,14 @@
     <header class="bg-white/80 backdrop-blur-md sticky top-0 z-40 px-4 py-3 flex justify-between items-center border-b border-slate-200">
         <div class="flex flex-col">
             <h1 class="text-sm font-bold text-slate-800">4x6满幅四联</h1>
-            <span class="text-[10px] text-slate-400">单张 3.0" × 2.0"</span>
+            <div class="flex items-center gap-2">
+                <span class="text-[10px] text-slate-400">单张 3.0" × 2.0"</span>
+                <select id="exportQuality" class="text-[10px] bg-slate-100 border-none rounded px-1 font-bold text-blue-600 focus:ring-0">
+                    <option value="1">预览 (600x900)</option>
+                    <option value="2" selected>高清 (1200x1800 / 300DPI)</option>
+                    <option value="3">超清 (1800x2700 / 450DPI)</option>
+                </select>
+            </div>
         </div>
         <button onclick="exportPhoto()" class="bg-blue-600 text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-md active:scale-95 transition">导出</button>
     </header>
@@ -154,7 +172,6 @@
                 <div class="cut-line-h"></div>
                 <div class="cut-line-v"></div>
 
-                <!-- 槽位结构预置 img 标签，避免 innerHTML 重写破坏引用 -->
                 <div class="photo-slot" style="top: 0; left: 0;" data-id="p1" onclick="selectSlot(this, event)">
                     <div class="slot-placeholder">
                         <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>
@@ -236,6 +253,12 @@
         </div>
     </div>
 
+    <div id="exportLoading">
+        <div class="animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent mb-4"></div>
+        <p class="text-sm font-medium">正在生成高清图片...</p>
+        <p class="text-[10px] text-zinc-400 mt-2">正在按照 300DPI 标准导出</p>
+    </div>
+
     <input type="file" id="fileInput" accept="image/*" class="hidden" onchange="handleFile(event)">
 
     <script>
@@ -267,7 +290,6 @@
             const hasImg = photoStates.has(activeSlot.dataset.id);
             document.getElementById('btnCrop').style.opacity = hasImg ? "1" : "0.3";
             document.getElementById('btnCrop').style.pointerEvents = hasImg ? "auto" : "none";
-            
             document.getElementById('toolbar').style.transform = "translateY(0)";
         }
 
@@ -280,7 +302,7 @@
         }
 
         function triggerUpload() { 
-            document.getElementById('fileInput').value = ''; // 清除值以允许重复选择同一张图
+            document.getElementById('fileInput').value = ''; 
             document.getElementById('fileInput').click(); 
         }
 
@@ -289,12 +311,9 @@
             const id = activeSlot.dataset.id;
             const img = activeSlot.querySelector('img');
             const placeholder = activeSlot.querySelector('.slot-placeholder');
-            
-            // 恢复初始状态而不是重写 HTML
             img.src = "";
             img.style.display = "none";
             placeholder.style.display = "flex";
-            
             photoStates.delete(id);
             deselectAll({ target: document.querySelector('.canvas-viewport') });
         }
@@ -306,11 +325,9 @@
             reader.onload = (e) => {
                 const img = activeSlot.querySelector('img');
                 const placeholder = activeSlot.querySelector('.slot-placeholder');
-                
                 img.src = e.target.result;
                 img.style.display = "block";
                 placeholder.style.display = "none";
-                
                 img.onload = () => {
                     const fitScale = Math.max(SLOT_W / img.naturalWidth, SLOT_H / img.naturalHeight);
                     const state = {
@@ -321,8 +338,6 @@
                     };
                     photoStates.set(activeSlot.dataset.id, state);
                     img.style.transform = `translate(${state.x}px, ${state.y}px) rotate(${state.rotate}deg) scale(${state.scale})`;
-                    
-                    // 更新工具栏状态
                     document.getElementById('btnCrop').style.opacity = "1";
                     document.getElementById('btnCrop').style.pointerEvents = "auto";
                 };
@@ -334,28 +349,23 @@
             if (!activeSlot) return;
             const img = activeSlot.querySelector('img');
             if (!photoStates.has(activeSlot.dataset.id)) return triggerUpload();
-
             const state = photoStates.get(activeSlot.dataset.id);
             const modal = document.getElementById('cropModal');
             const preview = document.getElementById('cropPreviewImg');
             const wrapper = document.getElementById('cropWrapper');
-
             preview.src = img.src;
             wrapper.style.width = SLOT_W + 'px';
             wrapper.style.height = SLOT_H + 'px';
-
             const screenW = window.innerWidth * 0.85;
             const screenH = window.innerHeight * 0.55;
             viewScale = Math.min(screenW / SLOT_W, screenH / SLOT_H);
             wrapper.style.transform = `scale(${viewScale})`;
-
             cropTemp = { ...state, isDragging: false };
             const zoomSlider = document.getElementById('cropZoom');
             zoomSlider.min = (cropTemp.scale * 0.1).toFixed(4);
-            zoomSlider.max = (cropTemp.scale * 5).toFixed(4);
+            zoomSlider.max = (cropTemp.scale * 10).toFixed(4);
             zoomSlider.value = cropTemp.scale;
             document.getElementById('cropRotate').value = cropTemp.rotate || 0;
-            
             updateCropTransform();
             modal.style.display = 'flex';
         }
@@ -364,7 +374,6 @@
             const newScale = parseFloat(document.getElementById('cropZoom').value);
             const oldScale = cropTemp.scale;
             const newRotate = parseInt(document.getElementById('cropRotate').value) || 0;
-            
             const imgRef = activeSlot.querySelector('img');
             if (oldScale !== newScale && imgRef) {
                 const cx = SLOT_W / 2;
@@ -377,12 +386,10 @@
                 cropTemp.y += vy * (1 - newScale / oldScale);
                 cropTemp.scale = newScale;
             }
-
             cropTemp.rotate = newRotate;
             const baseScale = photoStates.get(activeSlot.dataset.id)?.scale || 1;
             document.getElementById('zoomLabel').innerText = (cropTemp.scale / baseScale).toFixed(1) + 'X';
             document.getElementById('rotateLabel').innerText = cropTemp.rotate + '°';
-
             const preview = document.getElementById('cropPreviewImg');
             preview.style.transform = `translate(${cropTemp.x}px, ${cropTemp.y}px) rotate(${cropTemp.rotate}deg) scale(${cropTemp.scale})`;
         }
@@ -428,29 +435,41 @@
 
         async function exportPhoto() {
             const area = document.getElementById('capture-area');
+            const loading = document.getElementById('exportLoading');
+            const qualityScale = parseFloat(document.getElementById('exportQuality').value);
+            
+            loading.style.display = 'flex';
             const prevActive = activeSlot;
             if (activeSlot) activeSlot.classList.remove('active');
             
-            try {
-                const scaler = document.getElementById('scaler');
-                const originalTransform = scaler.style.transform;
-                scaler.style.transform = 'scale(1)';
-                
-                const canvas = await html2canvas(area, { 
-                    scale: 3, 
-                    useCORS: true,
-                    logging: false,
-                    backgroundColor: '#ffffff'
-                });
-                
-                scaler.style.transform = originalTransform;
-                
-                const link = document.createElement('a');
-                link.download = `Photo_4x6_Export.jpg`;
-                link.href = canvas.toDataURL('image/jpeg', 0.9);
-                link.click();
-            } catch (err) { console.error(err); }
-            finally { if (prevActive) prevActive.classList.add('active'); }
+            setTimeout(async () => {
+                try {
+                    const scaler = document.getElementById('scaler');
+                    const originalTransform = scaler.style.transform;
+                    scaler.style.transform = 'scale(1)';
+                    
+                    const canvas = await html2canvas(area, { 
+                        scale: qualityScale, 
+                        useCORS: true,
+                        logging: false,
+                        backgroundColor: '#ffffff'
+                    });
+                    
+                    scaler.style.transform = originalTransform;
+                    
+                    const link = document.createElement('a');
+                    const timestamp = new Date().getTime();
+                    link.download = `Photo_4x6_${1200 * (qualityScale/2)}x${1800 * (qualityScale/2)}.jpg`;
+                    link.href = canvas.toDataURL('image/jpeg', 0.95);
+                    link.click();
+                } catch (err) { 
+                    console.error(err);
+                    alert("生成失败，请尝试降低导出画质");
+                } finally { 
+                    if (prevActive) prevActive.classList.add('active');
+                    loading.style.display = 'none';
+                }
+            }, 100);
         }
     </script>
 </body>
