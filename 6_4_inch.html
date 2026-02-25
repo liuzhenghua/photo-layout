@@ -75,7 +75,7 @@
         }
 
         .sub-slot-frame.active {
-            box-shadow: 0 0 0 4px #3b82f6, 0 15px 35px rgba(0,0,0,0.25);
+            box-shadow: 0 0 0 2px #3b82f6, 0 15px 35px rgba(0,0,0,0.25);
             z-index: 100 !important;
         }
 
@@ -113,7 +113,7 @@
 
         #cropBox {
             position: absolute; inset: 0;
-            border: 2px solid #3b82f6;
+            border: 1px solid #3b82f6;
             box-shadow: 0 0 0 5000px rgba(0,0,0,0.8);
             z-index: 20; pointer-events: none;
         }
@@ -364,7 +364,7 @@
         }
 
         function applyImgStyle(img, state) {
-            img.style.transform = `translate(${state.x}px, ${state.y}px) scale(${state.scale}) rotate(${state.rotate}deg)`;
+            img.style.transform = `translate(${state.x}px, ${state.y}px) rotate(${state.rotate}deg) scale(${state.scale})`;
         }
 
         function clearSlot() {
@@ -389,6 +389,9 @@
             activeSlot.style.transform = `rotate(${angle + 5}deg)`;
         }
 
+        // Natural dimensions of the image currently being cropped (set in openCropModal)
+        let cropNaturalW = 0, cropNaturalH = 0;
+
         // --- 裁剪逻辑 ---
         function openCropModal() {
             if (!activeSlot) return;
@@ -398,6 +401,10 @@
             const state = photoStates.get(id);
             const img = activeSlot.querySelector('img.canvas-img');
             const type = id === 'main' ? 'main' : 'sub';
+
+            // Store natural size from the already-loaded canvas image
+            cropNaturalW = img.naturalWidth;
+            cropNaturalH = img.naturalHeight;
 
             const preview = document.getElementById('cropPreviewImg');
             preview.src = img.src;
@@ -413,11 +420,13 @@
             const screenH = window.innerHeight * 0.5;
             viewScale = Math.min(screenW / w, screenH / h);
             wrapper.style.transform = `scale(${viewScale})`;
+            // Compensate border for wrapper scale so it always appears 1px visually
+            document.getElementById('cropBox').style.borderWidth = (1 / viewScale).toFixed(2) + 'px';
 
             cropTemp = { ...state, isDragging: false };
             
             const zoomSlider = document.getElementById('cropZoom');
-            const baseScale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+            const baseScale = Math.max(w / cropNaturalW, h / cropNaturalH);
             zoomSlider.min = (baseScale * 0.5).toFixed(4);
             zoomSlider.max = (baseScale * 5).toFixed(4);
             zoomSlider.value = cropTemp.scale;
@@ -433,11 +442,77 @@
             cropTemp.scale = newScale;
             cropTemp.rotate = newRotate;
 
+            clampCropPosition();
+
             const preview = document.getElementById('cropPreviewImg');
             preview.style.transform = `translate(${cropTemp.x}px, ${cropTemp.y}px) rotate(${cropTemp.rotate}deg) scale(${cropTemp.scale})`;
 
             document.getElementById('zoomLabel').innerText = newScale.toFixed(2) + 'x';
             document.getElementById('rotateLabel').innerText = newRotate + '°';
+        }
+
+        // Clamp photo position so it always fully covers the crop area.
+        //
+        // CSS transform: translate(x,y) rotate(r) scale(s), transform-origin: center center.
+        // The image element is positioned at top:0 left:0 with size imgW x imgH.
+        // transform-origin "center center" means the pivot is the image's own center (imgW/2, imgH/2).
+        // translate(x,y) shifts the pivot point to (imgW/2 + x, imgH/2 + y) in the container.
+        // Then rotate+scale happen around that pivot.
+        //
+        // So the rendered image center (cx, cy) = (imgW/2 + x, imgH/2 + y).
+        // The AABB of the rotated+scaled image around (cx,cy) has half-extents (halfW, halfH).
+        //
+        // To cover the crop rect [0,cropW] x [0,cropH]:
+        //   cx - halfW <= 0   =>  x <= halfW - imgW/2          (left edge at or before 0)
+        //   cx + halfW >= cropW => x >= cropW - halfW - imgW/2  (right edge at or after cropW)
+        //   cy - halfH <= 0   =>  y <= halfH - imgH/2
+        //   cy + halfH >= cropH => y >= cropH - halfH - imgH/2
+        function clampCropPosition() {
+            if (!cropNaturalW || !activeSlot) return;
+
+            const imgW = cropNaturalW;
+            const imgH = cropNaturalH;
+            const id = activeSlot.dataset.id;
+            const type = id === 'main' ? 'main' : 'sub';
+            const cropW = LOGIC_W[type];
+            const cropH = LOGIC_H[type];
+
+            const r = cropTemp.rotate * Math.PI / 180;
+            const cosR = Math.abs(Math.cos(r));
+            const sinR = Math.abs(Math.sin(r));
+
+            // Minimum scale so that the AABB of the rotated image covers the crop rect.
+            // AABB width  = imgW*s*cosR + imgH*s*sinR >= cropW  => s >= cropW / (imgW*cosR + imgH*sinR)
+            // AABB height = imgW*s*sinR + imgH*s*cosR >= cropH  => s >= cropH / (imgW*sinR + imgH*cosR)
+            const minScale = Math.max(
+                cropW / (imgW * cosR + imgH * sinR),
+                cropH / (imgW * sinR + imgH * cosR)
+            );
+
+            // Enforce minimum scale and sync slider
+            if (cropTemp.scale < minScale) {
+                cropTemp.scale = minScale;
+                const slider = document.getElementById('cropZoom');
+                if (parseFloat(slider.min) > minScale) slider.min = minScale.toFixed(4);
+                slider.value = minScale;
+                document.getElementById('zoomLabel').innerText = minScale.toFixed(2) + 'x';
+            }
+
+            const s = cropTemp.scale;
+            const sw = imgW * s;
+            const sh = imgH * s;
+            const halfW = (sw * cosR + sh * sinR) / 2;
+            const halfH = (sw * sinR + sh * cosR) / 2;
+
+            // x in [cropW - halfW - imgW/2,  halfW - imgW/2]
+            const xMin = cropW - halfW - imgW / 2;
+            const xMax = halfW - imgW / 2;
+            // y in [cropH - halfH - imgH/2,  halfH - imgH/2]
+            const yMin = cropH - halfH - imgH / 2;
+            const yMax = halfH - imgH / 2;
+
+            cropTemp.x = Math.min(xMax, Math.max(xMin, cropTemp.x));
+            cropTemp.y = Math.min(yMax, Math.max(yMin, cropTemp.y));
         }
 
         function applyCrop() {
@@ -494,6 +569,15 @@
         }
 
         function onGlobalEnd() {
+            if (cropTemp.isDragging) {
+                cropTemp.isDragging = false;
+                clampCropPosition();
+                // Animate snap-back if position was corrected
+                const preview = document.getElementById('cropPreviewImg');
+                preview.style.transition = 'transform 0.25s ease';
+                preview.style.transform = `translate(${cropTemp.x}px, ${cropTemp.y}px) rotate(${cropTemp.rotate}deg) scale(${cropTemp.scale})`;
+                setTimeout(() => { preview.style.transition = ''; }, 300);
+            }
             cropTemp.isDragging = false;
             frameDragState.isDragging = false;
         }
