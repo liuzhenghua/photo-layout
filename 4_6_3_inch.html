@@ -14,14 +14,12 @@
             --slot-h: 450px;
         }
 
-        /* 移动端平滑滚动与禁止缩放补丁 */
         body { 
             touch-action: manipulation; 
             -webkit-tap-highlight-color: transparent;
             overscroll-behavior-y: contain;
         }
 
-        /* 自动适配屏幕宽度的画布容器 */
         .canvas-viewport {
             width: 100%;
             display: flex;
@@ -32,7 +30,6 @@
             min-height: calc(100vh - 160px);
         }
 
-        /* 使用缩放变换适配移动端屏幕 */
         .canvas-scaler {
             transform-origin: top center;
             transition: transform 0.2s ease;
@@ -48,7 +45,6 @@
             border: 1px solid #e2e8f0;
         }
         
-        /* 辅助线 */
         .cut-line-h {
             position: absolute; top: 50%; left: 0; right: 0;
             height: 1px; background: rgba(0,0,0,0.08);
@@ -70,7 +66,6 @@
             z-index: 10;
         }
 
-        /* 移动端点击反馈 */
         .photo-slot:active { background: #f1f5f9; }
         
         .photo-slot.active {
@@ -85,6 +80,7 @@
             pointer-events: none;
             max-width: none !important;
             max-height: none !important;
+            display: none; /* 初始隐藏，有图再显示 */
         }
 
         .slot-placeholder {
@@ -96,7 +92,6 @@
             border: 1px dashed #e2e8f0;
         }
 
-        /* 适配刘海屏的底部工具栏 */
         .safe-bottom {
             padding-bottom: env(safe-area-inset-bottom, 20px);
         }
@@ -128,7 +123,6 @@
             max-height: none !important;
         }
 
-        /* 滑块样式美化 */
         input[type=range] {
             -webkit-appearance: none;
             background: transparent;
@@ -146,7 +140,6 @@
 </head>
 <body class="bg-slate-50 min-h-screen flex flex-col">
 
-    <!-- 顶部状态栏 -->
     <header class="bg-white/80 backdrop-blur-md sticky top-0 z-40 px-4 py-3 flex justify-between items-center border-b border-slate-200">
         <div class="flex flex-col">
             <h1 class="text-sm font-bold text-slate-800">4x6满幅四联</h1>
@@ -161,35 +154,39 @@
                 <div class="cut-line-h"></div>
                 <div class="cut-line-v"></div>
 
+                <!-- 槽位结构预置 img 标签，避免 innerHTML 重写破坏引用 -->
                 <div class="photo-slot" style="top: 0; left: 0;" data-id="p1" onclick="selectSlot(this, event)">
                     <div class="slot-placeholder">
                         <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>
-                        <span class="text-[10px] mt-1 uppercase font-bold tracking-tighter">左上</span>
+                        <span class="text-[10px] mt-1 uppercase font-bold tracking-tighter">添加照片</span>
                     </div>
+                    <img src="" alt="">
                 </div>
                 <div class="photo-slot" style="top: 0; left: 300px;" data-id="p2" onclick="selectSlot(this, event)">
                     <div class="slot-placeholder">
                         <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>
-                        <span class="text-[10px] mt-1 uppercase font-bold tracking-tighter">右上</span>
+                        <span class="text-[10px] mt-1 uppercase font-bold tracking-tighter">添加照片</span>
                     </div>
+                    <img src="" alt="">
                 </div>
                 <div class="photo-slot" style="top: 450px; left: 0;" data-id="p3" onclick="selectSlot(this, event)">
                     <div class="slot-placeholder">
                         <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>
-                        <span class="text-[10px] mt-1 uppercase font-bold tracking-tighter">左下</span>
+                        <span class="text-[10px] mt-1 uppercase font-bold tracking-tighter">添加照片</span>
                     </div>
+                    <img src="" alt="">
                 </div>
                 <div class="photo-slot" style="top: 450px; left: 300px;" data-id="p4" onclick="selectSlot(this, event)">
                     <div class="slot-placeholder">
                         <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>
-                        <span class="text-[10px] mt-1 uppercase font-bold tracking-tighter">右下</span>
+                        <span class="text-[10px] mt-1 uppercase font-bold tracking-tighter">添加照片</span>
                     </div>
+                    <img src="" alt="">
                 </div>
             </div>
         </div>
     </main>
 
-    <!-- 底部动态菜单 -->
     <div id="toolbar" class="fixed bottom-0 left-0 right-0 bg-white shadow-[0_-10px_40px_rgba(0,0,0,0.05)] translate-y-full transition-transform duration-300 z-50 border-t border-slate-100 safe-bottom">
         <div class="flex justify-around p-4">
             <button onclick="triggerUpload()" class="flex flex-col items-center gap-1 group">
@@ -198,7 +195,7 @@
                 </div>
                 <span class="text-[11px] font-bold text-slate-500">更换照片</span>
             </button>
-            <button onclick="openCropModal()" class="flex flex-col items-center gap-1 group">
+            <button id="btnCrop" onclick="openCropModal()" class="flex flex-col items-center gap-1 group">
                 <div class="w-12 h-12 bg-slate-50 text-slate-600 rounded-2xl flex items-center justify-center group-active:scale-90 transition">
                     <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 3v15M18 6v15M3 6h15M6 18h15"/></svg>
                 </div>
@@ -213,7 +210,6 @@
         </div>
     </div>
 
-    <!-- 裁剪编辑弹窗 -->
     <div id="cropModal" class="crop-modal">
         <div class="p-4 flex justify-between items-center bg-black/80 backdrop-blur safe-top">
             <button onclick="closeCropModal()" class="text-white/40 text-sm px-2">取消</button>
@@ -251,11 +247,10 @@
         const SLOT_W = 300;
         const SLOT_H = 450;
 
-        // 移动端画布自动缩放逻辑
         function autoScaleCanvas() {
             const container = document.querySelector('.canvas-viewport');
             const scaler = document.getElementById('scaler');
-            const cw = container.clientWidth - 40; // 减去间距
+            const cw = container.clientWidth - 40;
             const scale = Math.min(cw / 600, 1);
             scaler.style.transform = `scale(${scale})`;
         }
@@ -268,6 +263,11 @@
             if (activeSlot) activeSlot.classList.remove('active');
             activeSlot = slot;
             activeSlot.classList.add('active');
+            
+            const hasImg = photoStates.has(activeSlot.dataset.id);
+            document.getElementById('btnCrop').style.opacity = hasImg ? "1" : "0.3";
+            document.getElementById('btnCrop').style.pointerEvents = hasImg ? "auto" : "none";
+            
             document.getElementById('toolbar').style.transform = "translateY(0)";
         }
 
@@ -279,15 +279,23 @@
             }
         }
 
-        function triggerUpload() { document.getElementById('fileInput').click(); }
+        function triggerUpload() { 
+            document.getElementById('fileInput').value = ''; // 清除值以允许重复选择同一张图
+            document.getElementById('fileInput').click(); 
+        }
 
         function clearSlot() {
             if (!activeSlot) return;
-            activeSlot.innerHTML = `<div class="slot-placeholder">
-                <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>
-                <span class="text-[10px] mt-1 uppercase font-bold tracking-tighter">添加照片</span>
-            </div>`;
-            photoStates.delete(activeSlot.dataset.id);
+            const id = activeSlot.dataset.id;
+            const img = activeSlot.querySelector('img');
+            const placeholder = activeSlot.querySelector('.slot-placeholder');
+            
+            // 恢复初始状态而不是重写 HTML
+            img.src = "";
+            img.style.display = "none";
+            placeholder.style.display = "flex";
+            
+            photoStates.delete(id);
             deselectAll({ target: document.querySelector('.canvas-viewport') });
         }
 
@@ -296,13 +304,13 @@
             if (!file || !activeSlot) return;
             const reader = new FileReader();
             reader.onload = (e) => {
-                let img = activeSlot.querySelector('img');
-                if (!img) {
-                    img = document.createElement('img');
-                    activeSlot.querySelector('.slot-placeholder').style.display = 'none';
-                    activeSlot.appendChild(img);
-                }
+                const img = activeSlot.querySelector('img');
+                const placeholder = activeSlot.querySelector('.slot-placeholder');
+                
                 img.src = e.target.result;
+                img.style.display = "block";
+                placeholder.style.display = "none";
+                
                 img.onload = () => {
                     const fitScale = Math.max(SLOT_W / img.naturalWidth, SLOT_H / img.naturalHeight);
                     const state = {
@@ -313,6 +321,10 @@
                     };
                     photoStates.set(activeSlot.dataset.id, state);
                     img.style.transform = `translate(${state.x}px, ${state.y}px) rotate(${state.rotate}deg) scale(${state.scale})`;
+                    
+                    // 更新工具栏状态
+                    document.getElementById('btnCrop').style.opacity = "1";
+                    document.getElementById('btnCrop').style.pointerEvents = "auto";
                 };
             };
             reader.readAsDataURL(file);
@@ -321,7 +333,7 @@
         function openCropModal() {
             if (!activeSlot) return;
             const img = activeSlot.querySelector('img');
-            if (!img) return triggerUpload();
+            if (!photoStates.has(activeSlot.dataset.id)) return triggerUpload();
 
             const state = photoStates.get(activeSlot.dataset.id);
             const modal = document.getElementById('cropModal');
@@ -353,12 +365,12 @@
             const oldScale = cropTemp.scale;
             const newRotate = parseInt(document.getElementById('cropRotate').value) || 0;
             
-            if (oldScale !== newScale) {
-                const img = activeSlot.querySelector('img');
+            const imgRef = activeSlot.querySelector('img');
+            if (oldScale !== newScale && imgRef) {
                 const cx = SLOT_W / 2;
                 const cy = SLOT_H / 2;
-                const imgCx = cropTemp.x + img.naturalWidth / 2;
-                const imgCy = cropTemp.y + img.naturalHeight / 2;
+                const imgCx = cropTemp.x + imgRef.naturalWidth / 2;
+                const imgCy = cropTemp.y + imgRef.naturalHeight / 2;
                 const vx = cx - imgCx;
                 const vy = cy - imgCy;
                 cropTemp.x += vx * (1 - newScale / oldScale);
@@ -367,7 +379,8 @@
             }
 
             cropTemp.rotate = newRotate;
-            document.getElementById('zoomLabel').innerText = (cropTemp.scale / (photoStates.get(activeSlot.dataset.id).scale || 1)).toFixed(1) + 'X';
+            const baseScale = photoStates.get(activeSlot.dataset.id)?.scale || 1;
+            document.getElementById('zoomLabel').innerText = (cropTemp.scale / baseScale).toFixed(1) + 'X';
             document.getElementById('rotateLabel').innerText = cropTemp.rotate + '°';
 
             const preview = document.getElementById('cropPreviewImg');
@@ -419,7 +432,6 @@
             if (activeSlot) activeSlot.classList.remove('active');
             
             try {
-                // 暂时重置缩放以获得最高质量
                 const scaler = document.getElementById('scaler');
                 const originalTransform = scaler.style.transform;
                 scaler.style.transform = 'scale(1)';
