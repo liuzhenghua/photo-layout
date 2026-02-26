@@ -274,11 +274,13 @@
         function handleFile(event) {
             const file = event.target.files[0];
             if (!file) return;
+
+            confirmedCropState = null;
+
             const reader = new FileReader();
             reader.onload = (e) => {
                 rawImageSrc = e.target.result;
-                confirmedCropState = null; // reset crop for new image
-                // Load natural size then show grid with default fit
+
                 const tmp = new Image();
                 tmp.onload = () => {
                     cropNaturalW = tmp.naturalWidth;
@@ -297,8 +299,11 @@
             const cw = opt ? parseFloat(opt.dataset.w) : 148;
             const ch = opt ? parseFloat(opt.dataset.h) : 207;
             const fitScale = Math.max(cw / cropNaturalW, ch / cropNaturalH);
-            const x = (cw - cropNaturalW * fitScale) / (2 * fitScale);
-            const y = (ch - cropNaturalH * fitScale) / (2 * fitScale);
+            // x/y are CSS translate offsets with transform-origin: center center.
+            // Image center must land on cropBox center (cw/2, ch/2).
+            // Image center without translate = (imgW/2, imgH/2), so offset needed:
+            const x = cw / 2 - cropNaturalW / 2;
+            const y = ch / 2 - cropNaturalH / 2;
             confirmedCropState = { x, y, scale: fitScale, rotate: 0, _cw: cw, _ch: ch };
             cropCellW = cw;
             cropCellH = ch;
@@ -344,8 +349,8 @@
                     cropTemp = { ...confirmedCropState, isDragging: false, lastX: 0, lastY: 0 };
                 } else {
                     const fitScale = Math.max(cropCellW / cropNaturalW, cropCellH / cropNaturalH);
-                    const x = (cropCellW - cropNaturalW * fitScale) / (2 * fitScale);
-                    const y = (cropCellH - cropNaturalH * fitScale) / (2 * fitScale);
+                    const x = cropCellW / 2 - cropNaturalW / 2;
+                    const y = cropCellH / 2 - cropNaturalH / 2;
                     cropTemp = { x, y, scale: fitScale, rotate: 0, isDragging: false, lastX: 0, lastY: 0 };
                 }
 
@@ -482,46 +487,27 @@
             const offsetX = Math.round((CANVAS_W - totalW) / 2);
             const offsetY = Math.round((CANVAS_H - totalH) / 2);
 
-            // The crop state (x, y, scale, rotate) was saved for cell size (_cw x _ch).
-            // Re-derive it for the current cellW x cellH by keeping the same visual crop ratio.
-            // The transform is: translate(x,y) rotate(r) scale(s), transform-origin: center center.
-            // Image element size is always cropNaturalW x cropNaturalH.
             const cs = confirmedCropState;
             const srcW = cs._cw;
             const srcH = cs._ch;
-
-            // Ratio between target cell and source cell
             const rx = cellW / srcW;
             const ry = cellH / srcH;
-
-            // Recompute transform for the new cell size.
-            // In the source cell: image center is at (imgW/2 + x, imgH/2 + y) in cell coords.
-            // We want the same relative position in the new cell.
             const imgW = cropNaturalW;
             const imgH = cropNaturalH;
 
-            // Image center position in source cell (pixels from cell top-left)
+            // cs.x/y are CSS translate offsets with transform-origin: center center.
+            // Image center in cropBox coords = (imgW/2 + cs.x, imgH/2 + cs.y).
+            // Map to cell coords, then convert back to center-origin translate offset.
             const srcCX = imgW / 2 + cs.x;
             const srcCY = imgH / 2 + cs.y;
-
-            // Normalised position (0..1 within source cell)
-            const normCX = srcCX / srcW;
-            const normCY = srcCY / srcH;
-
-            // Image center position in new cell
-            const dstCX = normCX * cellW;
-            const dstCY = normCY * cellH;
-
-            // New x/y for translate()
+            const dstCX = (srcCX / srcW) * cellW;
+            const dstCY = (srcCY / srcH) * cellH;
             const newX = dstCX - imgW / 2;
             const newY = dstCY - imgH / 2;
-
-            // Scale: the original scale was chosen to cover srcW x srcH.
-            // For the new cell we scale proportionally (use the larger ratio to keep coverage).
             const newScale = cs.scale * Math.max(rx, ry);
+            const transformStr = `translate(${newX}px,${newY}px) rotate(${cs.rotate}deg) scale(${newScale})`;
 
-            const adjState = { x: newX, y: newY, scale: newScale, rotate: cs.rotate };
-
+            const frag = document.createDocumentFragment();
             for (let r = 0; r < rows; r++) {
                 for (let c = 0; c < cols; c++) {
                     const wrap = document.createElement('div');
@@ -536,12 +522,13 @@
                     img.src = rawImageSrc;
                     img.style.width  = imgW + 'px';
                     img.style.height = imgH + 'px';
-                    img.style.transform = `translate(${adjState.x}px,${adjState.y}px) rotate(${adjState.rotate}deg) scale(${adjState.scale})`;
+                    img.style.transform = transformStr;
 
                     wrap.appendChild(img);
-                    canvas.appendChild(wrap);
+                    frag.appendChild(wrap);
                 }
             }
+            canvas.appendChild(frag);
         }
 
         document.getElementById('photoSizeSelect').addEventListener('change', () => {
@@ -553,8 +540,8 @@
             // If no confirmed crop yet, or size changed, reset to default fit
             if (!confirmedCropState || confirmedCropState._cw !== newCW || confirmedCropState._ch !== newCH) {
                 const fitScale = Math.max(newCW / cropNaturalW, newCH / cropNaturalH);
-                const x = (newCW - cropNaturalW * fitScale) / (2 * fitScale);
-                const y = (newCH - cropNaturalH * fitScale) / (2 * fitScale);
+                const x = newCW / 2 - cropNaturalW / 2;
+                const y = newCH / 2 - cropNaturalH / 2;
                 confirmedCropState = { x, y, scale: fitScale, rotate: 0, _cw: newCW, _ch: newCH };
                 cropCellW = newCW;
                 cropCellH = newCH;
