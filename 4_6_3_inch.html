@@ -264,6 +264,8 @@
     <script>
         let activeSlot = null;
         const photoStates = new Map();
+        // track natural image dimensions during cropping (used for clamping)
+        let cropNaturalW = 0, cropNaturalH = 0;
         let cropTemp = { x: 0, y: 0, scale: 1, rotate: 0, lastX: 0, lastY: 0, isDragging: false };
         let viewScale = 1;
 
@@ -353,6 +355,11 @@
             const modal = document.getElementById('cropModal');
             const preview = document.getElementById('cropPreviewImg');
             const wrapper = document.getElementById('cropWrapper');
+
+            // keep natural dimensions for clamping calculations
+            cropNaturalW = img.naturalWidth;
+            cropNaturalH = img.naturalHeight;
+
             preview.src = img.src;
             wrapper.style.width = SLOT_W + 'px';
             wrapper.style.height = SLOT_H + 'px';
@@ -362,6 +369,7 @@
             wrapper.style.transform = `scale(${viewScale})`;
             cropTemp = { ...state, isDragging: false };
             const zoomSlider = document.getElementById('cropZoom');
+            // slider bounds will be updated when clampCropPosition runs
             zoomSlider.min = (cropTemp.scale * 0.1).toFixed(4);
             zoomSlider.max = (cropTemp.scale * 10).toFixed(4);
             zoomSlider.value = cropTemp.scale;
@@ -387,6 +395,10 @@
                 cropTemp.scale = newScale;
             }
             cropTemp.rotate = newRotate;
+
+            // enforce constraints and adjust slider range
+            clampCropPosition();
+
             const baseScale = photoStates.get(activeSlot.dataset.id)?.scale || 1;
             document.getElementById('zoomLabel').innerText = (cropTemp.scale / baseScale).toFixed(1) + 'X';
             document.getElementById('rotateLabel').innerText = cropTemp.rotate + '°';
@@ -424,7 +436,16 @@
                 e.preventDefault();
             }
         }
-        function onEnd() { cropTemp.isDragging = false; }
+        function onEnd() {
+            if (cropTemp.isDragging) {
+                cropTemp.isDragging = false;
+                clampCropPosition();
+                const preview = document.getElementById('cropPreviewImg');
+                preview.style.transition = 'transform 0.25s ease';
+                preview.style.transform = `translate(${cropTemp.x}px, ${cropTemp.y}px) rotate(${cropTemp.rotate}deg) scale(${cropTemp.scale})`;
+                setTimeout(() => { preview.style.transition = ''; }, 300);
+            }
+        }
 
         document.addEventListener('mousedown', onStart);
         document.addEventListener('mousemove', onMove);
@@ -432,6 +453,47 @@
         document.addEventListener('touchstart', onStart, {passive: false});
         document.addEventListener('touchmove', onMove, {passive: false});
         document.addEventListener('touchend', onEnd);
+
+        // clamp helper copied from 6_4_inch.html
+        function clampCropPosition() {
+            if (!cropNaturalW || !activeSlot) return;
+            const imgW = cropNaturalW;
+            const imgH = cropNaturalH;
+            const cropW = SLOT_W;
+            const cropH = SLOT_H;
+
+            const r = cropTemp.rotate * Math.PI / 180;
+            const cosR = Math.abs(Math.cos(r));
+            const sinR = Math.abs(Math.sin(r));
+
+            const minScale = Math.max(
+                cropW / (imgW * cosR + imgH * sinR),
+                cropH / (imgW * sinR + imgH * cosR)
+            );
+
+            // enforce minimum scale and update slider
+            if (cropTemp.scale < minScale) {
+                cropTemp.scale = minScale;
+                const slider = document.getElementById('cropZoom');
+                if (parseFloat(slider.min) > minScale) slider.min = minScale.toFixed(4);
+                slider.value = minScale;
+                document.getElementById('zoomLabel').innerText = (cropTemp.scale / (photoStates.get(activeSlot.dataset.id)?.scale||1)).toFixed(1) + 'X';
+            }
+
+            const s = cropTemp.scale;
+            const sw = imgW * s;
+            const sh = imgH * s;
+            const halfW = (sw * cosR + sh * sinR) / 2;
+            const halfH = (sw * sinR + sh * cosR) / 2;
+
+            const xMin = cropW - halfW - imgW / 2;
+            const xMax = halfW - imgW / 2;
+            const yMin = cropH - halfH - imgH / 2;
+            const yMax = halfH - imgH / 2;
+
+            cropTemp.x = Math.min(xMax, Math.max(xMin, cropTemp.x));
+            cropTemp.y = Math.min(yMax, Math.max(yMin, cropTemp.y));
+        }
 
         async function exportPhoto() {
             const area = document.getElementById('capture-area');
