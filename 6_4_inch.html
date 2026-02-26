@@ -85,7 +85,35 @@
             background: #e2e8f0;
             overflow: hidden;
             position: relative;
+            min-width: 40px;
+            min-height: 30px;
         }
+
+        /* Resize handle */
+        .sub-slot-frame .resizer {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            right: 0;
+            bottom: 0;
+            background: transparent;
+            z-index: 110;
+            touch-action: none;
+        }
+
+        .sub-slot-frame .resizer::after {
+            content: '';
+            position: absolute;
+            right: 3px;
+            bottom: 3px;
+            width: 10px;
+            height: 10px;
+            border-right: 2px solid rgba(0,0,0,0.18);
+            border-bottom: 2px solid rgba(0,0,0,0.18);
+            border-radius: 1px;
+        }
+
+        .sub-slot-frame .resizer:hover { cursor: nwse-resize; }
 
         /* 通用图片样式 */
         img.canvas-img {
@@ -227,12 +255,18 @@
                 <span class="text-[10px] font-bold text-slate-500">裁剪</span>
             </button>
 
-            <!-- 仅小相框显示的旋转按钮 -->
-            <button id="btnRotateFrame" onclick="rotateActiveFrame()" class="flex flex-col items-center gap-1 group w-14 hidden">
+            <!-- 仅小相框显示的旋转按钮：左转与右转 -->
+            <button id="btnRotateLeft" onclick="rotateActiveFrame(-5)" class="flex flex-col items-center gap-1 group w-14 hidden">
                 <div class="w-10 h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center group-active:scale-90 transition">
-                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 4l-5 8 5 8"/></svg>
                 </div>
-                <span class="text-[10px] font-bold text-slate-500">转框</span>
+                <span class="text-[10px] font-bold text-slate-500">左转</span>
+            </button>
+            <button id="btnRotateRight" onclick="rotateActiveFrame(5)" class="flex flex-col items-center gap-1 group w-14 hidden">
+                <div class="w-10 h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center group-active:scale-90 transition">
+                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 4l5 8-5 8"/></svg>
+                </div>
+                <span class="text-[10px] font-bold text-slate-500">右转</span>
             </button>
 
             <button onclick="clearSlot()" class="flex flex-col items-center gap-1 group w-14">
@@ -292,6 +326,9 @@
         // 相框拖拽状态
         let frameDragState = { isDragging: false, startX: 0, startY: 0, initialLeft: 0, initialTop: 0 };
 
+        // resize state for sub frames
+        let resizeState = { isResizing: false, frame: null, startX: 0, startY: 0, initialW: 0, initialH: 0 };
+
         const LOGIC_W = { main: 900, sub: 160 };
         const LOGIC_H = { main: 600, sub: 120 };
 
@@ -304,8 +341,85 @@
             const scale = Math.min(cw / 900, 1);
             scaler.style.transform = `scale(${scale})`;
         }
+
+        // initialize existing frames with resizers and sizes
+        function initSubContainers() {
+            document.querySelectorAll('.sub-slot-frame').forEach((frame) => {
+                const container = frame.querySelector('.sub-image-container');
+                if (!container) return;
+                if (!frame.dataset.w) {
+                    frame.dataset.w = LOGIC_W.sub;
+                    frame.dataset.h = LOGIC_H.sub;
+                }
+                container.style.width = parseFloat(frame.dataset.w) + 'px';
+                container.style.height = parseFloat(frame.dataset.h) + 'px';
+                const img = container.querySelector('img.canvas-img');
+                if (img && img.src && img.naturalWidth) {
+                    const nw = img.naturalWidth;
+                    const nh = img.naturalHeight;
+                    const w = parseFloat(frame.dataset.w);
+                    const h = parseFloat(frame.dataset.h);
+                    const fitScale = Math.max(w / nw, h / nh);
+                    const x = (w - nw * fitScale) / (2 * fitScale);
+                    const y = (h - nh * fitScale) / (2 * fitScale);
+                    const id = frame.dataset.id;
+                    const state = { x, y, scale: fitScale, rotate: 0 };
+                    photoStates.set(id, state);
+                    img.style.width = nw + 'px';
+                    img.style.height = nh + 'px';
+                    img.style.display = 'block';
+                    applyImgStyle(img, state);
+                }
+                if (!frame.querySelector('.resizer')) {
+                    const r = document.createElement('div');
+                    r.className = 'resizer se';
+                    r.onmousedown = (e) => startResize(frame, e);
+                    r.ontouchstart = (e) => startResize(frame, e);
+                    frame.appendChild(r);
+                }
+            });
+        }
+
+        // compute normalized/clamped state for frame coverage
+        function normalizeAndClampStateForFrame(frame, img, stateIn) {
+            if (!frame || !img || !img.naturalWidth) return stateIn;
+            const id = frame.dataset.id;
+            const type = id === 'main' ? 'main' : 'sub';
+            let cropW = LOGIC_W[type];
+            let cropH = LOGIC_H[type];
+            if (type === 'sub') {
+                const fw = parseFloat(frame.dataset.w);
+                const fh = parseFloat(frame.dataset.h);
+                if (!isNaN(fw) && !isNaN(fh)) { cropW = fw; cropH = fh; }
+            }
+            const imgW = img.naturalWidth;
+            const imgH = img.naturalHeight;
+            const r = (stateIn.rotate || 0) * Math.PI / 180;
+            const cosR = Math.abs(Math.cos(r));
+            const sinR = Math.abs(Math.sin(r));
+            const minScale = Math.max(
+                cropW / (imgW * cosR + imgH * sinR),
+                cropH / (imgW * sinR + imgH * cosR)
+            );
+            let s = Math.max(stateIn.scale || 1, minScale);
+            const sw = imgW * s;
+            const sh = imgH * s;
+            const halfW = (sw * cosR + sh * sinR) / 2;
+            const halfH = (sw * sinR + sh * cosR) / 2;
+            const xMin = cropW - halfW - imgW / 2;
+            const xMax = halfW - imgW / 2;
+            const yMin = cropH - halfH - imgH / 2;
+            const yMax = halfH - imgH / 2;
+            let x = stateIn.x;
+            let y = stateIn.y;
+            if (isNaN(x)) x = 0;
+            if (isNaN(y)) y = 0;
+            x = Math.min(xMax, Math.max(xMin, x));
+            y = Math.min(yMax, Math.max(yMin, y));
+            return { x, y, scale: s, rotate: stateIn.rotate || 0 };
+        }
         window.addEventListener('resize', autoScaleCanvas);
-        window.addEventListener('load', autoScaleCanvas);
+        window.addEventListener('load', () => { autoScaleCanvas(); initSubContainers(); });
 
         function selectSlot(element, e) {
             if (e) e.stopPropagation();
@@ -319,7 +433,9 @@
             const hasImg = photoStates.has(id);
 
             document.getElementById('toolbar').style.transform = "translateY(0)";
-            document.getElementById('btnRotateFrame').style.display = isMain ? 'none' : 'flex';
+            const showRotate = isMain ? 'none' : 'flex';
+            document.getElementById('btnRotateLeft').style.display = showRotate;
+            document.getElementById('btnRotateRight').style.display = showRotate;
             
             const btnCrop = document.getElementById('btnCrop');
             btnCrop.style.opacity = hasImg ? "1" : "0.5";
@@ -356,19 +472,26 @@
                 if(placeholder) placeholder.style.display = 'none';
 
                 img.onload = () => {
-                    const w = LOGIC_W[type];
-                    const h = LOGIC_H[type];
+                    let w = LOGIC_W[type];
+                    let h = LOGIC_H[type];
+                    if (type === 'sub') {
+                        const fw = parseFloat(activeSlot.dataset.w);
+                        const fh = parseFloat(activeSlot.dataset.h);
+                        if (!isNaN(fw) && !isNaN(fh)) { w = fw; h = fh; }
+                    }
                     const fitScale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
-                    
-                    const state = {
-                        x: (w - img.naturalWidth) / 2,
-                        y: (h - img.naturalHeight) / 2,
-                        scale: fitScale,
-                        rotate: 0
-                    };
+                    const x = (w - img.naturalWidth * fitScale) / (2 * fitScale);
+                    const y = (h - img.naturalHeight * fitScale) / (2 * fitScale);
+
+                    let state = { x, y, scale: fitScale, rotate: 0 };
+                    img.style.width = img.naturalWidth + 'px';
+                    img.style.height = img.naturalHeight + 'px';
+                    img.style.display = 'block';
+                    img.style.opacity = '1';
+                    state = normalizeAndClampStateForFrame(activeSlot, img, state);
                     photoStates.set(id, state);
                     applyImgStyle(img, state);
-                    
+
                     document.getElementById('btnCrop').style.opacity = "1";
                     document.getElementById('btnCrop').style.pointerEvents = "auto";
                 };
@@ -399,12 +522,24 @@
 
             const container = document.createElement('div');
             container.className = 'sub-image-container';
+            container.style.width = LOGIC_W.sub + 'px';
+            container.style.height = LOGIC_H.sub + 'px';
             const img = document.createElement('img');
             img.className = 'canvas-img';
             img.src = '';
             img.alt = '';
             container.appendChild(img);
             frame.appendChild(container);
+
+            frame.dataset.w = LOGIC_W.sub;
+            frame.dataset.h = LOGIC_H.sub;
+
+            const r = document.createElement('div');
+            r.className = 'resizer se';
+            r.onmousedown = (e) => startResize(frame, e);
+            r.ontouchstart = (e) => startResize(frame, e);
+            frame.appendChild(r);
+
             area.appendChild(frame);
             selectSlot(frame);
         }
@@ -429,12 +564,13 @@
             deselectAll({ target: document.querySelector('.canvas-viewport') });
         }
 
-        function rotateActiveFrame() {
+        function rotateActiveFrame(delta = 5) {
             if (!activeSlot || activeSlot.dataset.id === 'main') return;
             const style = window.getComputedStyle(activeSlot);
             const matrix = new DOMMatrixReadOnly(style.transform);
             let angle = Math.round(Math.atan2(matrix.b, matrix.a) * (180 / Math.PI));
-            activeSlot.style.transform = `rotate(${angle + 5}deg)`;
+            angle = angle + delta;
+            activeSlot.style.transform = `rotate(${angle}deg)`;
         }
 
         // Natural dimensions of the image currently being cropped (set in openCropModal)
@@ -589,6 +725,19 @@
             frameDragState.initialTop = el.offsetTop;
         }
 
+        function startResize(frame, e) {
+            e.stopPropagation();
+            const point = e.touches ? e.touches[0] : e;
+            const container = frame.querySelector('.sub-image-container');
+            resizeState.isResizing = true;
+            resizeState.frame = frame;
+            resizeState.startX = point.clientX;
+            resizeState.startY = point.clientY;
+            resizeState.initialW = container.clientWidth;
+            resizeState.initialH = container.clientHeight;
+            selectSlot(frame, e);
+        }
+
         function startCropDrag(e) {
             const point = e.touches ? e.touches[0] : e;
             cropTemp.isDragging = true;
@@ -599,6 +748,22 @@
         function onGlobalMove(e) {
             const point = e.touches ? e.touches[0] : e;
 
+            // resizing logic
+            if (resizeState.isResizing && resizeState.frame) {
+                e.preventDefault();
+                const scaler = document.getElementById('scaler');
+                const canvasScale = parseFloat(window.getComputedStyle(scaler).transform.split(',')[3]) || 1;
+                const dx = (point.clientX - resizeState.startX) / canvasScale;
+                const dy = (point.clientY - resizeState.startY) / canvasScale;
+                const newW = Math.max(40, Math.round(resizeState.initialW + dx));
+                const newH = Math.max(30, Math.round(resizeState.initialH + dy));
+                const container = resizeState.frame.querySelector('.sub-image-container');
+                container.style.width = newW + 'px';
+                container.style.height = newH + 'px';
+                resizeState.frame.dataset.w = newW;
+                resizeState.frame.dataset.h = newH;
+                return;
+            }
             if (cropTemp.isDragging && document.getElementById('cropModal').style.display === 'flex') {
                 e.preventDefault();
                 const dx = point.clientX - cropTemp.lastX;
@@ -633,6 +798,26 @@
             }
             cropTemp.isDragging = false;
             frameDragState.isDragging = false;
+            if (resizeState.isResizing) {
+                const frame = resizeState.frame;
+                if (frame) {
+                    const container = frame.querySelector('.sub-image-container');
+                    const img = container ? container.querySelector('img.canvas-img') : null;
+                    const id = frame.dataset.id;
+                    if (img && img.src && img.naturalWidth) {
+                        const existing = photoStates.get(id) || { x:0, y:0, scale:1, rotate:0 };
+                        const state = normalizeAndClampStateForFrame(frame, img, existing);
+                        photoStates.set(id, state);
+                        img.style.width = img.naturalWidth + 'px';
+                        img.style.height = img.naturalHeight + 'px';
+                        img.style.display = 'block';
+                        img.style.opacity = '1';
+                        applyImgStyle(img, state);
+                    }
+                }
+                resizeState.isResizing = false;
+                resizeState.frame = null;
+            }
         }
 
         const cropImg = document.getElementById('cropPreviewImg');
