@@ -274,12 +274,20 @@
                 <span class="text-[10px] font-bold text-slate-500">裁剪</span>
             </button>
 
-            <!-- 仅小相框显示的旋转按钮 -->
-            <button id="btnRotateFrame" onclick="rotateActiveFrame()" class="flex flex-col items-center gap-1 group w-14 hidden">
+            <!-- 仅小相框显示的旋转按钮：先逆时针，再顺时针 -->
+            <button id="btnRotateLeft" onclick="rotateActiveFrame(-5)" class="flex flex-col items-center gap-1 group w-14 hidden">
                 <div class="w-10 h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center group-active:scale-90 transition">
-                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    <!-- 左箭头 -->
+                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 4l-5 8 5 8"/></svg>
                 </div>
-                <span class="text-[10px] font-bold text-slate-500">转框</span>
+                <span class="text-[10px] font-bold text-slate-500">左转</span>
+            </button>
+            <button id="btnRotateRight" onclick="rotateActiveFrame(5)" class="flex flex-col items-center gap-1 group w-14 hidden">
+                <div class="w-10 h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center group-active:scale-90 transition">
+                    <!-- 右箭头 -->
+                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 4l5 8-5 8"/></svg>
+                </div>
+                <span class="text-[10px] font-bold text-slate-500">右转</span>
             </button>
 
             <button onclick="clearSlot()" class="flex flex-col items-center gap-1 group w-14">
@@ -418,7 +426,9 @@
 
             // 更新工具栏状态
             document.getElementById('toolbar').style.transform = "translateY(0)";
-            document.getElementById('btnRotateFrame').style.display = isMain ? 'none' : 'flex';
+            const showRotate = isMain ? 'none' : 'flex';
+            document.getElementById('btnRotateLeft').style.display = showRotate;
+            document.getElementById('btnRotateRight').style.display = showRotate;
             
             const btnCrop = document.getElementById('btnCrop');
             btnCrop.style.opacity = hasImg ? "1" : "0.5";
@@ -616,13 +626,14 @@
         }
 
         // --- 相框旋转逻辑 (仅针对小相框) ---
-        function rotateActiveFrame() {
+        function rotateActiveFrame(delta = 5) {
             if (!activeSlot || activeSlot.dataset.id === 'main') return;
-            // 获取当前旋转角度并增加 5 度
+            // 获取当前旋转角度
             const style = window.getComputedStyle(activeSlot);
             const matrix = new DOMMatrixReadOnly(style.transform);
             let angle = Math.round(Math.atan2(matrix.b, matrix.a) * (180 / Math.PI));
-            activeSlot.style.transform = `rotate(${angle + 5}deg)`;
+            angle = angle + delta;
+            activeSlot.style.transform = `rotate(${angle}deg)`;
         }
 
         // Natural dimensions of the image currently being cropped (set in openCropModal)
