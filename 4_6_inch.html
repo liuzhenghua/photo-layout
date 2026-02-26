@@ -85,7 +85,35 @@
             background: #e2e8f0;
             overflow: hidden;
             position: relative;
+            min-width: 40px;
+            min-height: 30px;
         }
+
+        /* Resize handle */
+        .sub-slot-frame .resizer {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            right: 0;
+            bottom: 0;
+            background: transparent;
+            z-index: 110;
+            touch-action: none;
+        }
+
+        .sub-slot-frame .resizer::after {
+            content: '';
+            position: absolute;
+            right: 3px;
+            bottom: 3px;
+            width: 10px;
+            height: 10px;
+            border-right: 2px solid rgba(0,0,0,0.18);
+            border-bottom: 2px solid rgba(0,0,0,0.18);
+            border-radius: 1px;
+        }
+
+        .sub-slot-frame .resizer:hover { cursor: nwse-resize; }
 
         /* 通用图片样式 */
         img.canvas-img {
@@ -316,6 +344,9 @@
         const LOGIC_W = { main: 600, sub: 175 };
         const LOGIC_H = { main: 900, sub: 120 };
 
+        // resize state for sub frames
+        let resizeState = { isResizing: false, frame: null, startX: 0, startY: 0, initialW: 0, initialH: 0 };
+
         // 自动缩放画布以适应屏幕
         function autoScaleCanvas() {
             const container = document.querySelector('.canvas-viewport');
@@ -327,7 +358,32 @@
             scaler.style.marginBottom = `${(900 * scale) - 900}px`; // 修正缩放后的留白
         }
         window.addEventListener('resize', autoScaleCanvas);
-        window.addEventListener('load', autoScaleCanvas);
+        window.addEventListener('load', () => { autoScaleCanvas(); initSubContainers(); });
+
+        // Ensure existing sub frames have resizers and initial sizes
+        function initSubContainers() {
+            document.querySelectorAll('.sub-slot-frame').forEach((frame) => {
+                const container = frame.querySelector('.sub-image-container');
+                if (!container) return;
+
+                // initialize size from logical defaults if not set
+                if (!frame.dataset.w) {
+                    frame.dataset.w = LOGIC_W.sub;
+                    frame.dataset.h = LOGIC_H.sub;
+                }
+                container.style.width = parseFloat(frame.dataset.w) + 'px';
+                container.style.height = parseFloat(frame.dataset.h) + 'px';
+
+                // add resizer handle if missing
+                if (!frame.querySelector('.resizer')) {
+                    const r = document.createElement('div');
+                    r.className = 'resizer se';
+                    r.onmousedown = (e) => startResize(frame, e);
+                    r.ontouchstart = (e) => startResize(frame, e);
+                    frame.appendChild(r);
+                }
+            });
+        }
 
         // 选中 Slot（区分背景 main 和小相框 sub）
         function selectSlot(element, e) {
@@ -431,12 +487,26 @@
 
             const container = document.createElement('div');
             container.className = 'sub-image-container';
+            // set initial logical size
+            container.style.width = LOGIC_W.sub + 'px';
+            container.style.height = LOGIC_H.sub + 'px';
             const img = document.createElement('img');
             img.className = 'canvas-img';
             img.src = '';
             img.alt = '';
             container.appendChild(img);
             frame.appendChild(container);
+
+            // store logical size on frame dataset
+            frame.dataset.w = LOGIC_W.sub;
+            frame.dataset.h = LOGIC_H.sub;
+
+            // add resizer handle
+            const r = document.createElement('div');
+            r.className = 'resizer se';
+            r.onmousedown = (e) => startResize(frame, e);
+            r.ontouchstart = (e) => startResize(frame, e);
+            frame.appendChild(r);
 
             area.appendChild(frame);
             selectSlot(frame);
@@ -495,8 +565,14 @@
             preview.src = img.src;
             
             const wrapper = document.getElementById('cropWrapper');
-            const w = LOGIC_W[type];
-            const h = LOGIC_H[type];
+            // Use per-frame logical size for sub frames
+            let w = LOGIC_W[type];
+            let h = LOGIC_H[type];
+            if (type === 'sub') {
+                const fw = parseFloat(activeSlot.dataset.w);
+                const fh = parseFloat(activeSlot.dataset.h);
+                if (!isNaN(fw) && !isNaN(fh)) { w = fw; h = fh; }
+            }
             wrapper.style.width = w + 'px';
             wrapper.style.height = h + 'px';
 
@@ -550,8 +626,14 @@
             const imgH = cropNaturalH;
             const id = activeSlot.dataset.id;
             const type = id === 'main' ? 'main' : 'sub';
-            const cropW = LOGIC_W[type];
-            const cropH = LOGIC_H[type];
+            // dynamic crop size for sub frames
+            let cropW = LOGIC_W[type];
+            let cropH = LOGIC_H[type];
+            if (type === 'sub') {
+                const fw = parseFloat(activeSlot.dataset.w);
+                const fh = parseFloat(activeSlot.dataset.h);
+                if (!isNaN(fw) && !isNaN(fh)) { cropW = fw; cropH = fh; }
+            }
 
             const r = cropTemp.rotate * Math.PI / 180;
             const cosR = Math.abs(Math.cos(r));
@@ -612,6 +694,22 @@
             frameDragState.initialTop = el.offsetTop;
         }
 
+        // 3. 相框大小调整 (Resize)
+        function startResize(frame, e) {
+            // prevent selecting/moving when starting resize
+            e.stopPropagation();
+            const point = e.touches ? e.touches[0] : e;
+            const container = frame.querySelector('.sub-image-container');
+            resizeState.isResizing = true;
+            resizeState.frame = frame;
+            resizeState.startX = point.clientX;
+            resizeState.startY = point.clientY;
+            resizeState.initialW = container.clientWidth;
+            resizeState.initialH = container.clientHeight;
+            // ensure selected
+            selectSlot(frame, e);
+        }
+
         // 2. 裁剪图片拖拽 (Crop Image Drag)
         function startCropDrag(e) {
             const point = e.touches ? e.touches[0] : e;
@@ -623,6 +721,25 @@
         // 全局 Move
         function onGlobalMove(e) {
             const point = e.touches ? e.touches[0] : e;
+
+            // 处理相框缩放
+            if (resizeState.isResizing && resizeState.frame) {
+                e.preventDefault();
+                const scaler = document.getElementById('scaler');
+                const canvasScale = parseFloat(window.getComputedStyle(scaler).transform.split(',')[3]) || 1;
+                const dx = (point.clientX - resizeState.startX) / canvasScale;
+                const dy = (point.clientY - resizeState.startY) / canvasScale;
+
+                const newW = Math.max(40, Math.round(resizeState.initialW + dx));
+                const newH = Math.max(30, Math.round(resizeState.initialH + dy));
+
+                const container = resizeState.frame.querySelector('.sub-image-container');
+                container.style.width = newW + 'px';
+                container.style.height = newH + 'px';
+                resizeState.frame.dataset.w = newW;
+                resizeState.frame.dataset.h = newH;
+                return;
+            }
 
             // 处理裁剪图拖拽
             if (cropTemp.isDragging && document.getElementById('cropModal').style.display === 'flex') {
@@ -668,6 +785,11 @@
             }
             cropTemp.isDragging = false;
             frameDragState.isDragging = false;
+            // finish resizing
+            if (resizeState.isResizing) {
+                resizeState.isResizing = false;
+                resizeState.frame = null;
+            }
         }
 
         // 绑定裁剪图的拖拽事件
