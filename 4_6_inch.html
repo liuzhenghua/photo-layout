@@ -868,30 +868,23 @@
             frameDragState.isDragging = false;
             // finish resizing
             if (resizeState.isResizing) {
-                // before clearing, refit image inside the frame so it covers new size
                 const frame = resizeState.frame;
                 if (frame) {
-                    try {
-                        const container = frame.querySelector('.sub-image-container');
-                        const img = container ? container.querySelector('img.canvas-img') : null;
-                        const id = frame.dataset.id;
-                        if (img && img.src && img.naturalWidth) {
-                            const nw = img.naturalWidth;
-                            const nh = img.naturalHeight;
-                            const w = parseFloat(container.clientWidth);
-                            const h = parseFloat(container.clientHeight);
-                            const fitScale = Math.max(w / nw, h / nh);
-                            const x = (w - nw * fitScale) / (2 * fitScale);
-                            const y = (h - nh * fitScale) / (2 * fitScale);
-                            const state = { x, y, scale: fitScale, rotate: 0 };
-                            photoStates.set(id, state);
-                            img.style.width = nw + 'px';
-                            img.style.height = nh + 'px';
-                            img.style.display = 'block';
-                            img.style.opacity = '1';
-                            applyImgStyle(img, state);
-                        }
-                    } catch (err) { console.error(err); }
+                    const container = frame.querySelector('.sub-image-container');
+                    const img = container ? container.querySelector('img.canvas-img') : null;
+                    const id = frame.dataset.id;
+                    if (img && img.src && img.naturalWidth) {
+                        // take existing state and re-normalize against new size/rotate/scale
+                        const existing = photoStates.get(id) || { x:0, y:0, scale:1, rotate:0 };
+                        const state = normalizeAndClampStateForFrame(frame, img, existing);
+                        photoStates.set(id, state);
+                        // ensure image has explicit size still
+                        img.style.width = img.naturalWidth + 'px';
+                        img.style.height = img.naturalHeight + 'px';
+                        img.style.display = 'block';
+                        img.style.opacity = '1';
+                        applyImgStyle(img, state);
+                    }
                 }
                 resizeState.isResizing = false;
                 resizeState.frame = null;
