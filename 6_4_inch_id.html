@@ -7,10 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
-        :root {
-            --canvas-w: 900px;
-            --canvas-h: 600px;
-        }
+        :root { --canvas-w: 900px; --canvas-h: 600px; }
 
         body {
             touch-action: manipulation;
@@ -25,7 +22,7 @@
             align-items: center;
             padding: 20px 10px;
             background: #f8fafc;
-            min-height: calc(100vh - 160px);
+            min-height: calc(100vh - 56px);
             overflow: hidden;
         }
 
@@ -44,25 +41,42 @@
         }
 
         .placeholder {
+            position: absolute; inset: 0;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            color: #cbd5e1; pointer-events: none;
+            gap: 8px;
+        }
+
+        .cell-wrap {
             position: absolute;
-            inset: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #cbd5e1;
-            pointer-events: none;
-            font-size: 14px;
-            font-weight: 600;
+            overflow: hidden;
         }
 
         img.cell-img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
+            position: absolute;
+            top: 0; left: 0;
+            transform-origin: center center;
+            pointer-events: none;
+            max-width: none !important;
+            max-height: none !important;
         }
 
-        /* Loading overlay copied from other pages */
+        /* Bottom toolbar */
+        #toolbar {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: #fff;
+            border-top: 1px solid #e2e8f0;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.06);
+            display: none;
+            padding: 10px 16px;
+            padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+            z-index: 50;
+            gap: 10px;
+        }
+        #toolbar.visible { display: flex; }
+
+        /* Export loading */
         #exportLoading {
             display: none;
             position: fixed; inset: 0;
@@ -74,16 +88,44 @@
             backdrop-filter: blur(5px);
         }
 
-        .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 20px); }
-
-        input[type=range] { -webkit-appearance: none; background: transparent; }
+        input[type=range] { -webkit-appearance: none; appearance: none; background: transparent; }
         input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; background: #333; border-radius: 2px; }
         input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; background: #3b82f6; margin-top: -8px; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
+
+        /* Crop modal */
+        .crop-modal {
+            position: fixed; inset: 0;
+            background: #000; z-index: 1000;
+            display: none; flex-direction: column;
+        }
+
+        #cropSizer { overflow: hidden; flex-shrink: 0; }
+
+        #cropWrapper {
+            position: relative;
+            transform-origin: top left;
+            background: #111;
+        }
+
+        #cropBox {
+            position: absolute; inset: 0;
+            border: 1px solid #3b82f6;
+            box-shadow: 0 0 0 5000px rgba(0,0,0,0.8);
+            z-index: 20; pointer-events: none;
+        }
+
+        #cropPreviewImg {
+            position: absolute; top: 0; left: 0;
+            cursor: move; touch-action: none;
+            transform-origin: center center;
+            max-width: none !important;
+            max-height: none !important;
+        }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen flex flex-col">
 
-    <!-- 顶部导航 -->
+    <!-- Header -->
     <header class="bg-white/90 backdrop-blur sticky top-0 z-40 px-4 py-3 flex justify-between items-center border-b border-slate-200 shadow-sm">
         <div class="flex flex-col">
             <h1 class="text-sm font-bold text-slate-800">证件照（6寸横版）</h1>
@@ -96,11 +138,10 @@
                 </select>
             </div>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2">
             <select id="photoSizeSelect" class="text-[10px] bg-slate-100 border-none rounded px-2 py-1 font-bold text-zinc-700 focus:ring-0">
-                <option value="" disabled selected>选择照片尺寸</option>
-                <option data-w="148" data-h="207">一寸照 25×35mm</option>
-                <option data-w="195" data-h="284">小一寸/2寸 33×48mm</option>
+                <option data-w="148" data-h="207" selected>一寸照 25×35mm</option>
+                <option data-w="195" data-h="284">小一寸 33×48mm</option>
                 <option data-w="207" data-h="290">二寸照 35×49mm</option>
                 <option data-w="206" data-h="266">小二寸 35×45mm</option>
                 <option data-w="179" data-h="221">身份证照 26×32mm</option>
@@ -109,22 +150,48 @@
                 <option data-w="300" data-h="300">美国签证 51×51mm</option>
                 <option data-w="266" data-h="266">日本签证 45×45mm</option>
                 <option data-w="600" data-h="800">香港旅行 40×50mm</option>
-                <option data-w="150" data-h="200">教师资格（150×200px）</option>
             </select>
             <button onclick="exportPhoto()" class="bg-blue-600 text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-md active:scale-95 transition">导出</button>
         </div>
     </header>
 
-    <!-- 主画布区域 -->
-    <main class="flex-1 canvas-viewport" onclick="triggerUpload()">
+    <!-- Canvas area — click only triggers upload when no image -->
+    <main class="flex-1 canvas-viewport" id="canvasViewport">
+        <!-- Placeholder lives outside photoCanvas so innerHTML='' won't remove it -->
+        <div id="placeholder" class="placeholder" style="position:absolute;inset:0;pointer-events:none;">
+            <svg class="w-12 h-12 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+            <span class="text-sm font-semibold">点击上传照片</span>
+        </div>
         <div id="scaler" class="canvas-scaler">
-            <div id="photoCanvas" class="photo-canvas">
-                <div id="placeholder" class="placeholder">点击上传照片</div>
-            </div>
+            <div id="photoCanvas" class="photo-canvas"></div>
         </div>
     </main>
 
-    <!-- 导出 Loading -->
+    <!-- Bottom toolbar (visible after image loaded) -->
+    <div id="toolbar" style="display:none">
+        <!-- Upload new photo -->
+        <button onclick="triggerUpload()" class="flex flex-col items-center gap-1 flex-1 group">
+            <div class="w-10 h-10 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center group-active:scale-90 transition">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+            </div>
+            <span class="text-[10px] font-bold text-slate-500">换图</span>
+        </button>
+        <!-- Crop -->
+        <button onclick="openCropModal()" class="flex flex-col items-center gap-1 flex-1 group">
+            <div class="w-10 h-10 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center group-active:scale-90 transition">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path d="M6 3v15M18 6v15M3 6h15M6 18h15"/>
+                </svg>
+            </div>
+            <span class="text-[10px] font-bold text-slate-500">裁剪</span>
+        </button>
+    </div>
+
+    <!-- Export loading -->
     <div id="exportLoading">
         <div class="animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent mb-4"></div>
         <p class="text-sm font-medium">正在生成高清图片...</p>
@@ -133,22 +200,71 @@
 
     <input type="file" id="fileInput" accept="image/*" class="hidden" onchange="handleFile(event)">
 
+    <!-- Crop modal -->
+    <div id="cropModal" class="crop-modal">
+        <div class="p-4 flex justify-between items-center bg-black/80 backdrop-blur">
+            <button onclick="closeCropModal()" class="text-white/40 text-sm px-2">取消</button>
+            <span class="text-white text-xs font-bold tracking-widest uppercase">裁剪照片</span>
+            <button onclick="applyCrop()" class="bg-blue-600 text-white px-5 py-2 rounded-full text-xs font-bold">保存</button>
+        </div>
+        <div class="flex-1 flex items-center justify-center overflow-hidden p-4" id="cropViewport">
+            <div id="cropSizer">
+                <div id="cropWrapper">
+                    <img id="cropPreviewImg" src="" draggable="false">
+                    <div id="cropBox"></div>
+                </div>
+            </div>
+        </div>
+        <div class="p-8 bg-zinc-950" style="padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px))">
+            <div class="max-w-xs mx-auto space-y-6">
+                <div>
+                    <div class="flex justify-between text-[10px] text-zinc-500 font-black mb-2">
+                        <span>缩放</span><span id="zoomLabel" class="text-blue-500">1.0x</span>
+                    </div>
+                    <input type="range" id="cropZoom" min="0.1" max="3" step="0.01" oninput="updateCropTransform()">
+                </div>
+                <div>
+                    <div class="flex justify-between text-[10px] text-zinc-500 font-black mb-2">
+                        <span>旋转</span><span id="rotateLabel" class="text-blue-500">0°</span>
+                    </div>
+                    <input type="range" id="cropRotate" min="-180" max="180" step="1" oninput="updateCropTransform()">
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         const CANVAS_W = 900;
         const CANVAS_H = 600;
-        const CELL_PADDING = 4; // pixels between photos
-        let uploadedImageSrc = null;
+        const CELL_PADDING = 4;
 
+        let rawImageSrc = null;       // original uploaded image, never changed
+        let cropNaturalW = 0, cropNaturalH = 0;
+        let cropCellW = 0, cropCellH = 0;
+        let viewScale = 1;
+
+        // Current confirmed crop state { x, y, scale, rotate }
+        let confirmedCropState = null;
+
+        // Working state inside the crop modal
+        let cropTemp = { x: 0, y: 0, scale: 1, rotate: 0, isDragging: false, lastX: 0, lastY: 0 };
+
+        // ─── Canvas scaling ───────────────────────────────────────────────────
         function autoScaleCanvas() {
-            const container = document.querySelector('.canvas-viewport');
+            const container = document.getElementById('canvasViewport');
             const scaler = document.getElementById('scaler');
-            const cw = container.clientWidth - 20; // padding
+            const cw = container.clientWidth - 20;
             const scale = Math.min(cw / CANVAS_W, 1);
             scaler.style.transform = `scale(${scale})`;
             scaler.style.marginBottom = `${(CANVAS_H * scale) - CANVAS_H}px`;
         }
         window.addEventListener('resize', autoScaleCanvas);
         window.addEventListener('load', autoScaleCanvas);
+
+        // ─── Upload ───────────────────────────────────────────────────────────
+        document.getElementById('canvasViewport').addEventListener('click', () => {
+            if (!rawImageSrc) triggerUpload();
+        });
 
         function triggerUpload() {
             document.getElementById('fileInput').value = '';
@@ -160,52 +276,293 @@
             if (!file) return;
             const reader = new FileReader();
             reader.onload = (e) => {
-                uploadedImageSrc = e.target.result;
-                document.getElementById('placeholder').style.display = 'none';
-                fillGrid();
+                rawImageSrc = e.target.result;
+                confirmedCropState = null; // reset crop for new image
+                // Load natural size then show grid with default fit
+                const tmp = new Image();
+                tmp.onload = () => {
+                    cropNaturalW = tmp.naturalWidth;
+                    cropNaturalH = tmp.naturalHeight;
+                    applyDefaultCropState();
+                    showToolbar();
+                    fillGrid();
+                };
+                tmp.src = rawImageSrc;
             };
             reader.readAsDataURL(file);
         }
 
+        function applyDefaultCropState() {
+            const opt = document.getElementById('photoSizeSelect').selectedOptions[0];
+            const cw = opt ? parseFloat(opt.dataset.w) : 148;
+            const ch = opt ? parseFloat(opt.dataset.h) : 207;
+            const fitScale = Math.max(cw / cropNaturalW, ch / cropNaturalH);
+            const x = (cw - cropNaturalW * fitScale) / (2 * fitScale);
+            const y = (ch - cropNaturalH * fitScale) / (2 * fitScale);
+            confirmedCropState = { x, y, scale: fitScale, rotate: 0, _cw: cw, _ch: ch };
+            cropCellW = cw;
+            cropCellH = ch;
+        }
+
+        function showToolbar() {
+            document.getElementById('placeholder').style.display = 'none';
+            document.getElementById('toolbar').style.display = 'flex';
+            autoScaleCanvas();
+        }
+
+        // ─── Crop modal ───────────────────────────────────────────────────────
+        function openCropModal() {
+            if (!rawImageSrc) { triggerUpload(); return; }
+
+            const opt = document.getElementById('photoSizeSelect').selectedOptions[0];
+            cropCellW = opt ? parseFloat(opt.dataset.w) : 148;
+            cropCellH = opt ? parseFloat(opt.dataset.h) : 207;
+
+            const preview = document.getElementById('cropPreviewImg');
+
+            const init = () => {
+                cropNaturalW = preview.naturalWidth;
+                cropNaturalH = preview.naturalHeight;
+
+                const wrapper = document.getElementById('cropWrapper');
+                wrapper.style.width = cropCellW + 'px';
+                wrapper.style.height = cropCellH + 'px';
+
+                const screenW = window.innerWidth * 0.85;
+                const screenH = window.innerHeight * 0.5;
+                viewScale = Math.min(screenW / cropCellW, screenH / cropCellH);
+                wrapper.style.transform = `scale(${viewScale})`;
+
+                const sizer = document.getElementById('cropSizer');
+                sizer.style.width = Math.round(cropCellW * viewScale) + 'px';
+                sizer.style.height = Math.round(cropCellH * viewScale) + 'px';
+
+                document.getElementById('cropBox').style.borderWidth = (1 / viewScale).toFixed(2) + 'px';
+
+                // Use confirmed state if it matches current cell size, else default fit
+                if (confirmedCropState && cropCellW === confirmedCropState._cw && cropCellH === confirmedCropState._ch) {
+                    cropTemp = { ...confirmedCropState, isDragging: false, lastX: 0, lastY: 0 };
+                } else {
+                    const fitScale = Math.max(cropCellW / cropNaturalW, cropCellH / cropNaturalH);
+                    const x = (cropCellW - cropNaturalW * fitScale) / (2 * fitScale);
+                    const y = (cropCellH - cropNaturalH * fitScale) / (2 * fitScale);
+                    cropTemp = { x, y, scale: fitScale, rotate: 0, isDragging: false, lastX: 0, lastY: 0 };
+                }
+
+                const baseScale = Math.max(cropCellW / cropNaturalW, cropCellH / cropNaturalH);
+                const zoomSlider = document.getElementById('cropZoom');
+                zoomSlider.min = (baseScale * 0.5).toFixed(4);
+                zoomSlider.max = (baseScale * 5).toFixed(4);
+                zoomSlider.value = cropTemp.scale;
+                document.getElementById('cropRotate').value = cropTemp.rotate;
+
+                updateCropTransform();
+                document.getElementById('cropModal').style.display = 'flex';
+            };
+
+            if (preview.src !== rawImageSrc) {
+                preview.onload = init;
+                preview.src = rawImageSrc;
+            } else if (preview.complete && preview.naturalWidth) {
+                init();
+            } else {
+                preview.onload = init;
+            }
+        }
+
+        function updateCropTransform() {
+            cropTemp.scale = parseFloat(document.getElementById('cropZoom').value);
+            cropTemp.rotate = parseInt(document.getElementById('cropRotate').value);
+            clampCropPosition();
+
+            const preview = document.getElementById('cropPreviewImg');
+            preview.style.transform = `translate(${cropTemp.x}px, ${cropTemp.y}px) rotate(${cropTemp.rotate}deg) scale(${cropTemp.scale})`;
+
+            document.getElementById('zoomLabel').textContent = cropTemp.scale.toFixed(2) + 'x';
+            document.getElementById('rotateLabel').textContent = cropTemp.rotate + '°';
+        }
+
+        function clampCropPosition() {
+            if (!cropNaturalW) return;
+            const imgW = cropNaturalW, imgH = cropNaturalH;
+            const cropW = cropCellW, cropH = cropCellH;
+            const r = cropTemp.rotate * Math.PI / 180;
+            const cosR = Math.abs(Math.cos(r));
+            const sinR = Math.abs(Math.sin(r));
+
+            const minScale = Math.max(
+                cropW / (imgW * cosR + imgH * sinR),
+                cropH / (imgW * sinR + imgH * cosR)
+            );
+
+            if (cropTemp.scale < minScale) {
+                cropTemp.scale = minScale;
+                const slider = document.getElementById('cropZoom');
+                if (parseFloat(slider.min) > minScale) slider.min = minScale.toFixed(4);
+                slider.value = minScale;
+                document.getElementById('zoomLabel').textContent = minScale.toFixed(2) + 'x';
+            }
+
+            const s = cropTemp.scale;
+            const sw = imgW * s, sh = imgH * s;
+            const halfW = (sw * cosR + sh * sinR) / 2;
+            const halfH = (sw * sinR + sh * cosR) / 2;
+
+            cropTemp.x = Math.min(halfW - imgW / 2, Math.max(cropW - halfW - imgW / 2, cropTemp.x));
+            cropTemp.y = Math.min(halfH - imgH / 2, Math.max(cropH - halfH - imgH / 2, cropTemp.y));
+        }
+
+        function applyCrop() {
+            confirmedCropState = {
+                x: cropTemp.x, y: cropTemp.y,
+                scale: cropTemp.scale, rotate: cropTemp.rotate,
+                _cw: cropCellW, _ch: cropCellH  // remember which cell size this was for
+            };
+            closeCropModal();
+            fillGrid();
+        }
+
+        function closeCropModal() {
+            document.getElementById('cropModal').style.display = 'none';
+        }
+
+        // ─── Crop drag ────────────────────────────────────────────────────────
+        function startCropDrag(e) {
+            const pt = e.touches ? e.touches[0] : e;
+            cropTemp.isDragging = true;
+            cropTemp.lastX = pt.clientX;
+            cropTemp.lastY = pt.clientY;
+        }
+
+        function onGlobalMove(e) {
+            if (!cropTemp.isDragging) return;
+            if (document.getElementById('cropModal').style.display !== 'flex') return;
+            e.preventDefault();
+            const pt = e.touches ? e.touches[0] : e;
+            cropTemp.x += (pt.clientX - cropTemp.lastX) / viewScale;
+            cropTemp.y += (pt.clientY - cropTemp.lastY) / viewScale;
+            cropTemp.lastX = pt.clientX;
+            cropTemp.lastY = pt.clientY;
+            document.getElementById('cropPreviewImg').style.transform =
+                `translate(${cropTemp.x}px, ${cropTemp.y}px) rotate(${cropTemp.rotate}deg) scale(${cropTemp.scale})`;
+        }
+
+        function onGlobalEnd() {
+            if (!cropTemp.isDragging) return;
+            cropTemp.isDragging = false;
+            clampCropPosition();
+            const preview = document.getElementById('cropPreviewImg');
+            preview.style.transition = 'transform 0.25s ease';
+            preview.style.transform = `translate(${cropTemp.x}px, ${cropTemp.y}px) rotate(${cropTemp.rotate}deg) scale(${cropTemp.scale})`;
+            setTimeout(() => { preview.style.transition = ''; }, 300);
+        }
+
+        document.getElementById('cropPreviewImg').addEventListener('mousedown', startCropDrag);
+        document.getElementById('cropPreviewImg').addEventListener('touchstart', startCropDrag, { passive: false });
+        document.addEventListener('mousemove', onGlobalMove);
+        document.addEventListener('touchmove', onGlobalMove, { passive: false });
+        document.addEventListener('mouseup', onGlobalEnd);
+        document.addEventListener('touchend', onGlobalEnd);
+
+        // ─── Grid layout ──────────────────────────────────────────────────────
         function fillGrid() {
-            if (!uploadedImageSrc) return;
-            const select = document.getElementById('photoSizeSelect');
-            const opt = select.selectedOptions[0];
-            if (!opt || !opt.dataset.w || !opt.dataset.h) return;
-            const w = parseFloat(opt.dataset.w);
-            const h = parseFloat(opt.dataset.h);
+            if (!rawImageSrc || !confirmedCropState) return;
+            const opt = document.getElementById('photoSizeSelect').selectedOptions[0];
+            if (!opt || !opt.dataset.w) return;
+            const cellW = parseFloat(opt.dataset.w);
+            const cellH = parseFloat(opt.dataset.h);
+
             const canvas = document.getElementById('photoCanvas');
-            canvas.innerHTML = ''; // clear old cells
-            // include padding in spacing calculations
-            const cols = Math.floor((CANVAS_W + CELL_PADDING) / (w + CELL_PADDING));
-            const rows = Math.floor((CANVAS_H + CELL_PADDING) / (h + CELL_PADDING));
-            // center the grid taking padding into account
-            const totalW = cols * w + (cols - 1) * CELL_PADDING;
-            const totalH = rows * h + (rows - 1) * CELL_PADDING;
+            canvas.innerHTML = '';
+
+            const cols = Math.floor((CANVAS_W + CELL_PADDING) / (cellW + CELL_PADDING));
+            const rows = Math.floor((CANVAS_H + CELL_PADDING) / (cellH + CELL_PADDING));
+            const totalW = cols * cellW + (cols - 1) * CELL_PADDING;
+            const totalH = rows * cellH + (rows - 1) * CELL_PADDING;
             const offsetX = Math.round((CANVAS_W - totalW) / 2);
             const offsetY = Math.round((CANVAS_H - totalH) / 2);
+
+            // The crop state (x, y, scale, rotate) was saved for cell size (_cw x _ch).
+            // Re-derive it for the current cellW x cellH by keeping the same visual crop ratio.
+            // The transform is: translate(x,y) rotate(r) scale(s), transform-origin: center center.
+            // Image element size is always cropNaturalW x cropNaturalH.
+            const cs = confirmedCropState;
+            const srcW = cs._cw;
+            const srcH = cs._ch;
+
+            // Ratio between target cell and source cell
+            const rx = cellW / srcW;
+            const ry = cellH / srcH;
+
+            // Recompute transform for the new cell size.
+            // In the source cell: image center is at (imgW/2 + x, imgH/2 + y) in cell coords.
+            // We want the same relative position in the new cell.
+            const imgW = cropNaturalW;
+            const imgH = cropNaturalH;
+
+            // Image center position in source cell (pixels from cell top-left)
+            const srcCX = imgW / 2 + cs.x;
+            const srcCY = imgH / 2 + cs.y;
+
+            // Normalised position (0..1 within source cell)
+            const normCX = srcCX / srcW;
+            const normCY = srcCY / srcH;
+
+            // Image center position in new cell
+            const dstCX = normCX * cellW;
+            const dstCY = normCY * cellH;
+
+            // New x/y for translate()
+            const newX = dstCX - imgW / 2;
+            const newY = dstCY - imgH / 2;
+
+            // Scale: the original scale was chosen to cover srcW x srcH.
+            // For the new cell we scale proportionally (use the larger ratio to keep coverage).
+            const newScale = cs.scale * Math.max(rx, ry);
+
+            const adjState = { x: newX, y: newY, scale: newScale, rotate: cs.rotate };
+
             for (let r = 0; r < rows; r++) {
                 for (let c = 0; c < cols; c++) {
-                    const cell = document.createElement('div');
-                    cell.style.position = 'absolute';
-                    cell.style.left = (offsetX + c * (w + CELL_PADDING)) + 'px';
-                    cell.style.top = (offsetY + r * (h + CELL_PADDING)) + 'px';
-                    cell.style.width = w + 'px';
-                    cell.style.height = h + 'px';
-                    cell.style.overflow = 'hidden';
+                    const wrap = document.createElement('div');
+                    wrap.className = 'cell-wrap';
+                    wrap.style.left = (offsetX + c * (cellW + CELL_PADDING)) + 'px';
+                    wrap.style.top  = (offsetY + r * (cellH + CELL_PADDING)) + 'px';
+                    wrap.style.width  = cellW + 'px';
+                    wrap.style.height = cellH + 'px';
+
                     const img = document.createElement('img');
                     img.className = 'cell-img';
-                    img.src = uploadedImageSrc;
-                    cell.appendChild(img);
-                    canvas.appendChild(cell);
+                    img.src = rawImageSrc;
+                    img.style.width  = imgW + 'px';
+                    img.style.height = imgH + 'px';
+                    img.style.transform = `translate(${adjState.x}px,${adjState.y}px) rotate(${adjState.rotate}deg) scale(${adjState.scale})`;
+
+                    wrap.appendChild(img);
+                    canvas.appendChild(wrap);
                 }
             }
         }
 
         document.getElementById('photoSizeSelect').addEventListener('change', () => {
-            if (uploadedImageSrc) fillGrid();
+            if (!rawImageSrc) return;
+            // Recompute default crop for new size, keep existing if user already cropped
+            const opt = document.getElementById('photoSizeSelect').selectedOptions[0];
+            const newCW = parseFloat(opt.dataset.w);
+            const newCH = parseFloat(opt.dataset.h);
+            // If no confirmed crop yet, or size changed, reset to default fit
+            if (!confirmedCropState || confirmedCropState._cw !== newCW || confirmedCropState._ch !== newCH) {
+                const fitScale = Math.max(newCW / cropNaturalW, newCH / cropNaturalH);
+                const x = (newCW - cropNaturalW * fitScale) / (2 * fitScale);
+                const y = (newCH - cropNaturalH * fitScale) / (2 * fitScale);
+                confirmedCropState = { x, y, scale: fitScale, rotate: 0, _cw: newCW, _ch: newCH };
+                cropCellW = newCW;
+                cropCellH = newCH;
+            }
+            fillGrid();
         });
 
+        // ─── Export ───────────────────────────────────────────────────────────
         async function exportPhoto() {
             const qualityScale = parseFloat(document.getElementById('exportQuality').value);
             const loading = document.getElementById('exportLoading');
@@ -214,25 +571,25 @@
             setTimeout(async () => {
                 try {
                     const scaler = document.getElementById('scaler');
-                    const originalTransform = scaler.style.transform;
-                    const originalMargin = scaler.style.marginBottom;
+                    const origTransform = scaler.style.transform;
+                    const origMargin = scaler.style.marginBottom;
                     scaler.style.transform = 'scale(1)';
                     scaler.style.marginBottom = '0';
 
-                    const canvas = await html2canvas(document.getElementById('photoCanvas'), {
+                    const cvs = await html2canvas(document.getElementById('photoCanvas'), {
                         scale: qualityScale,
                         useCORS: true,
                         logging: false,
                         backgroundColor: '#ffffff'
                     });
 
-                    scaler.style.transform = originalTransform;
-                    scaler.style.marginBottom = originalMargin;
+                    scaler.style.transform = origTransform;
+                    scaler.style.marginBottom = origMargin;
 
                     const link = document.createElement('a');
-                    const dpiInfo = qualityScale === 2 ? 'HD' : (qualityScale === 3 ? 'UHD' : 'Preview');
-                    link.download = `IDPhoto_${dpiInfo}_${Date.now()}.jpg`;
-                    link.href = canvas.toDataURL('image/jpeg', 0.92);
+                    const dpi = qualityScale === 2 ? 'HD' : (qualityScale === 3 ? 'UHD' : 'Preview');
+                    link.download = `IDPhoto_${dpi}_${Date.now()}.jpg`;
+                    link.href = cvs.toDataURL('image/jpeg', 0.92);
                     link.click();
                 } catch (err) {
                     console.error(err);
