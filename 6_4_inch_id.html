@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>6寸横版证件照排版工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        :root {
+            --canvas-w: 900px;
+            --canvas-h: 600px;
+        }
+
+        body {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior-y: contain;
+        }
+
+        .canvas-viewport {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px 10px;
+            background: #f8fafc;
+            min-height: calc(100vh - 160px);
+            overflow: hidden;
+        }
+
+        .canvas-scaler {
+            transform-origin: center center;
+            transition: transform 0.2s ease;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+        }
+
+        .photo-canvas {
+            width: var(--canvas-w);
+            height: var(--canvas-h);
+            background: #fff;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .placeholder {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #cbd5e1;
+            pointer-events: none;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        img.cell-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        /* Loading overlay copied from other pages */
+        #exportLoading {
+            display: none;
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.85);
+            z-index: 2000;
+            flex-direction: column;
+            align-items: center; justify-content: center;
+            color: white;
+            backdrop-filter: blur(5px);
+        }
+
+        .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 20px); }
+
+        input[type=range] { -webkit-appearance: none; background: transparent; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; background: #333; border-radius: 2px; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; background: #3b82f6; margin-top: -8px; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen flex flex-col">
+
+    <!-- 顶部导航 -->
+    <header class="bg-white/90 backdrop-blur sticky top-0 z-40 px-4 py-3 flex justify-between items-center border-b border-slate-200 shadow-sm">
+        <div class="flex flex-col">
+            <h1 class="text-sm font-bold text-slate-800">证件照（6寸横版）</h1>
+            <div class="flex items-center gap-2 mt-0.5">
+                <span class="text-[10px] text-slate-400">底图 6×4</span>
+                <select id="exportQuality" class="text-[10px] bg-slate-100 border-none rounded px-1 py-0.5 font-bold text-blue-600 focus:ring-0">
+                    <option value="1">预览 (900×600)</option>
+                    <option value="2">高清 (1800×1200 / 300DPI)</option>
+                    <option value="3" selected>超清 (2700×1800 / 450DPI)</option>
+                </select>
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <select id="photoSizeSelect" class="text-[10px] bg-slate-100 border-none rounded px-2 py-1 font-bold text-zinc-700 focus:ring-0">
+                <option value="" disabled selected>选择照片尺寸</option>
+                <option data-w="148" data-h="207">一寸照 25×35mm</option>
+                <option data-w="195" data-h="284">小一寸/2寸 33×48mm</option>
+                <option data-w="207" data-h="290">二寸照 35×49mm</option>
+                <option data-w="206" data-h="266">小二寸 35×45mm</option>
+                <option data-w="179" data-h="221">身份证照 26×32mm</option>
+                <option data-w="130" data-h="189">驾驶证照 22×32mm</option>
+                <option data-w="195" data-h="284">护照照 33×48mm</option>
+                <option data-w="300" data-h="300">美国签证 51×51mm</option>
+                <option data-w="266" data-h="266">日本签证 45×45mm</option>
+                <option data-w="600" data-h="800">香港旅行 40×50mm</option>
+                <option data-w="150" data-h="200">教师资格（150×200px）</option>
+            </select>
+            <button onclick="exportPhoto()" class="bg-blue-600 text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-md active:scale-95 transition">导出</button>
+        </div>
+    </header>
+
+    <!-- 主画布区域 -->
+    <main class="flex-1 canvas-viewport" onclick="triggerUpload()">
+        <div id="scaler" class="canvas-scaler">
+            <div id="photoCanvas" class="photo-canvas">
+                <div id="placeholder" class="placeholder">点击上传照片</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 导出 Loading -->
+    <div id="exportLoading">
+        <div class="animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent mb-4"></div>
+        <p class="text-sm font-medium">正在生成高清图片...</p>
+        <p class="text-[10px] text-zinc-400 mt-2">Render Engine v2.0</p>
+    </div>
+
+    <input type="file" id="fileInput" accept="image/*" class="hidden" onchange="handleFile(event)">
+
+    <script>
+        const CANVAS_W = 900;
+        const CANVAS_H = 600;
+        const CELL_PADDING = 4; // pixels between photos
+        let uploadedImageSrc = null;
+
+        function autoScaleCanvas() {
+            const container = document.querySelector('.canvas-viewport');
+            const scaler = document.getElementById('scaler');
+            const cw = container.clientWidth - 20; // padding
+            const scale = Math.min(cw / CANVAS_W, 1);
+            scaler.style.transform = `scale(${scale})`;
+            scaler.style.marginBottom = `${(CANVAS_H * scale) - CANVAS_H}px`;
+        }
+        window.addEventListener('resize', autoScaleCanvas);
+        window.addEventListener('load', autoScaleCanvas);
+
+        function triggerUpload() {
+            document.getElementById('fileInput').value = '';
+            document.getElementById('fileInput').click();
+        }
+
+        function handleFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                uploadedImageSrc = e.target.result;
+                document.getElementById('placeholder').style.display = 'none';
+                fillGrid();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function fillGrid() {
+            if (!uploadedImageSrc) return;
+            const select = document.getElementById('photoSizeSelect');
+            const opt = select.selectedOptions[0];
+            if (!opt || !opt.dataset.w || !opt.dataset.h) return;
+            const w = parseFloat(opt.dataset.w);
+            const h = parseFloat(opt.dataset.h);
+            const canvas = document.getElementById('photoCanvas');
+            canvas.innerHTML = ''; // clear old cells
+            // include padding in spacing calculations
+            const cols = Math.floor((CANVAS_W + CELL_PADDING) / (w + CELL_PADDING));
+            const rows = Math.floor((CANVAS_H + CELL_PADDING) / (h + CELL_PADDING));
+            // center the grid taking padding into account
+            const totalW = cols * w + (cols - 1) * CELL_PADDING;
+            const totalH = rows * h + (rows - 1) * CELL_PADDING;
+            const offsetX = Math.round((CANVAS_W - totalW) / 2);
+            const offsetY = Math.round((CANVAS_H - totalH) / 2);
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const cell = document.createElement('div');
+                    cell.style.position = 'absolute';
+                    cell.style.left = (offsetX + c * (w + CELL_PADDING)) + 'px';
+                    cell.style.top = (offsetY + r * (h + CELL_PADDING)) + 'px';
+                    cell.style.width = w + 'px';
+                    cell.style.height = h + 'px';
+                    cell.style.overflow = 'hidden';
+                    const img = document.createElement('img');
+                    img.className = 'cell-img';
+                    img.src = uploadedImageSrc;
+                    cell.appendChild(img);
+                    canvas.appendChild(cell);
+                }
+            }
+        }
+
+        document.getElementById('photoSizeSelect').addEventListener('change', () => {
+            if (uploadedImageSrc) fillGrid();
+        });
+
+        async function exportPhoto() {
+            const qualityScale = parseFloat(document.getElementById('exportQuality').value);
+            const loading = document.getElementById('exportLoading');
+            loading.style.display = 'flex';
+
+            setTimeout(async () => {
+                try {
+                    const scaler = document.getElementById('scaler');
+                    const originalTransform = scaler.style.transform;
+                    const originalMargin = scaler.style.marginBottom;
+                    scaler.style.transform = 'scale(1)';
+                    scaler.style.marginBottom = '0';
+
+                    const canvas = await html2canvas(document.getElementById('photoCanvas'), {
+                        scale: qualityScale,
+                        useCORS: true,
+                        logging: false,
+                        backgroundColor: '#ffffff'
+                    });
+
+                    scaler.style.transform = originalTransform;
+                    scaler.style.marginBottom = originalMargin;
+
+                    const link = document.createElement('a');
+                    const dpiInfo = qualityScale === 2 ? 'HD' : (qualityScale === 3 ? 'UHD' : 'Preview');
+                    link.download = `IDPhoto_${dpiInfo}_${Date.now()}.jpg`;
+                    link.href = canvas.toDataURL('image/jpeg', 0.92);
+                    link.click();
+                } catch (err) {
+                    console.error(err);
+                    alert('导出失败，内存不足或图片过大');
+                } finally {
+                    loading.style.display = 'none';
+                }
+            }, 100);
+        }
+    </script>
+</body>
+</html>
