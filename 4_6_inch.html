@@ -374,6 +374,25 @@
                 container.style.width = parseFloat(frame.dataset.w) + 'px';
                 container.style.height = parseFloat(frame.dataset.h) + 'px';
 
+                // if there's already an image inside, refit it to the container
+                const img = container.querySelector('img.canvas-img');
+                if (img && img.src && img.naturalWidth) {
+                    const nw = img.naturalWidth;
+                    const nh = img.naturalHeight;
+                    const w = parseFloat(frame.dataset.w);
+                    const h = parseFloat(frame.dataset.h);
+                    const fitScale = Math.max(w / nw, h / nh);
+                    const x = (w - nw * fitScale) / (2 * fitScale);
+                    const y = (h - nh * fitScale) / (2 * fitScale);
+                    const id = frame.dataset.id;
+                    const state = { x, y, scale: fitScale, rotate: 0 };
+                    photoStates.set(id, state);
+                    img.style.width = nw + 'px';
+                    img.style.height = nh + 'px';
+                    img.style.display = 'block';
+                    applyImgStyle(img, state);
+                }
+
                 // add resizer handle if missing
                 if (!frame.querySelector('.resizer')) {
                     const r = document.createElement('div');
@@ -440,16 +459,30 @@
 
                 img.onload = () => {
                     // 计算初始适配比例 (Cover 模式)
-                    const w = LOGIC_W[type];
-                    const h = LOGIC_H[type];
+                    let w = LOGIC_W[type];
+                    let h = LOGIC_H[type];
+                    if (type === 'sub') {
+                        const fw = parseFloat(activeSlot.dataset.w);
+                        const fh = parseFloat(activeSlot.dataset.h);
+                        if (!isNaN(fw) && !isNaN(fh)) { w = fw; h = fh; }
+                    }
                     const fitScale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
-                    
-                    const state = {
-                        x: (w - img.naturalWidth) / 2,
-                        y: (h - img.naturalHeight) / 2,
-                        scale: fitScale,
-                        rotate: 0
-                    };
+
+                    // 因为 transform 顺序为 translate -> rotate -> scale，
+                    // translate 会被后续的 scale 放大。所以这里计算出的 x/y 应
+                    // 保证缩放后视觉上图片中心处于裁剪框中心。
+                    const x = (w - img.naturalWidth * fitScale) / (2 * fitScale);
+                    const y = (h - img.naturalHeight * fitScale) / (2 * fitScale);
+
+                    let state = { x: x, y: y, scale: fitScale, rotate: 0 };
+                    // ensure the image element has explicit intrinsic size so transforms are predictable
+                    img.style.width = img.naturalWidth + 'px';
+                    img.style.height = img.naturalHeight + 'px';
+                    img.style.display = 'block';
+                    img.style.opacity = '1';
+
+                    // normalize & clamp so the image immediately covers the container
+                    state = normalizeAndClampStateForFrame(activeSlot, img, state);
                     photoStates.set(id, state);
                     applyImgStyle(img, state);
                     
@@ -463,6 +496,54 @@
 
         function applyImgStyle(img, state) {
             img.style.transform = `translate(${state.x}px, ${state.y}px) rotate(${state.rotate}deg) scale(${state.scale})`;
+        }
+
+        // Compute a normalized/clamped state so the given image covers its frame.
+        function normalizeAndClampStateForFrame(frame, img, stateIn) {
+            if (!frame || !img || !img.naturalWidth) return stateIn;
+            const id = frame.dataset.id;
+            const type = id === 'main' ? 'main' : 'sub';
+            let cropW = LOGIC_W[type];
+            let cropH = LOGIC_H[type];
+            if (type === 'sub') {
+                const fw = parseFloat(frame.dataset.w);
+                const fh = parseFloat(frame.dataset.h);
+                if (!isNaN(fw) && !isNaN(fh)) { cropW = fw; cropH = fh; }
+            }
+
+            const imgW = img.naturalWidth;
+            const imgH = img.naturalHeight;
+            const r = (stateIn.rotate || 0) * Math.PI / 180;
+            const cosR = Math.abs(Math.cos(r));
+            const sinR = Math.abs(Math.sin(r));
+
+            // min scale so the rotated AABB covers the crop rect
+            const minScale = Math.max(
+                cropW / (imgW * cosR + imgH * sinR),
+                cropH / (imgW * sinR + imgH * cosR)
+            );
+
+            let s = Math.max(stateIn.scale || 1, minScale);
+            // compute visual half extents
+            const sw = imgW * s;
+            const sh = imgH * s;
+            const halfW = (sw * cosR + sh * sinR) / 2;
+            const halfH = (sw * sinR + sh * cosR) / 2;
+
+            // compute allowable center offsets in the pre-transform (translate) space
+            const xMin = cropW - halfW - imgW / 2;
+            const xMax = halfW - imgW / 2;
+            const yMin = cropH - halfH - imgH / 2;
+            const yMax = halfH - imgH / 2;
+
+            let x = stateIn.x;
+            let y = stateIn.y;
+            if (isNaN(x)) x = 0;
+            if (isNaN(y)) y = 0;
+            x = Math.min(xMax, Math.max(xMin, x));
+            y = Math.min(yMax, Math.max(yMin, y));
+
+            return { x, y, scale: s, rotate: stateIn.rotate || 0 };
         }
 
         // 添加新的子相框
@@ -787,6 +868,31 @@
             frameDragState.isDragging = false;
             // finish resizing
             if (resizeState.isResizing) {
+                // before clearing, refit image inside the frame so it covers new size
+                const frame = resizeState.frame;
+                if (frame) {
+                    try {
+                        const container = frame.querySelector('.sub-image-container');
+                        const img = container ? container.querySelector('img.canvas-img') : null;
+                        const id = frame.dataset.id;
+                        if (img && img.src && img.naturalWidth) {
+                            const nw = img.naturalWidth;
+                            const nh = img.naturalHeight;
+                            const w = parseFloat(container.clientWidth);
+                            const h = parseFloat(container.clientHeight);
+                            const fitScale = Math.max(w / nw, h / nh);
+                            const x = (w - nw * fitScale) / (2 * fitScale);
+                            const y = (h - nh * fitScale) / (2 * fitScale);
+                            const state = { x, y, scale: fitScale, rotate: 0 };
+                            photoStates.set(id, state);
+                            img.style.width = nw + 'px';
+                            img.style.height = nh + 'px';
+                            img.style.display = 'block';
+                            img.style.opacity = '1';
+                            applyImgStyle(img, state);
+                        }
+                    } catch (err) { console.error(err); }
+                }
                 resizeState.isResizing = false;
                 resizeState.frame = null;
             }
