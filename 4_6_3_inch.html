@@ -42,18 +42,13 @@
             box-shadow: 0 4px 25px rgba(0,0,0,0.1);
             position: relative;
             overflow: hidden;
-            border: 1px solid #e2e8f0;
+            /* outer border removed per user request */
+            border: none;
         }
         
-        .cut-line-h {
-            position: absolute; top: 50%; left: 0; right: 0;
-            height: 1px; background: rgba(0,0,0,0.08);
-            z-index: 30; pointer-events: none;
-        }
+        .cut-line-h,
         .cut-line-v {
-            position: absolute; left: 50%; top: 0; bottom: 0;
-            width: 1px; background: rgba(0,0,0,0.08);
-            z-index: 30; pointer-events: none;
+            display: none; /* no middle cut lines */
         }
 
         .photo-slot {
@@ -163,6 +158,7 @@
                 </select>
             </div>
         </div>
+        <button onclick="openMarginModal()" class="bg-gray-200 text-gray-700 px-4 py-1.5 rounded-full text-xs font-bold shadow-md active:scale-95 transition mr-2">边距</button>
         <button onclick="exportPhoto()" class="bg-blue-600 text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-md active:scale-95 transition">导出</button>
     </header>
 
@@ -253,6 +249,27 @@
         </div>
     </div>
 
+    <!-- margin modal -->
+    <div id="marginModal" class="crop-modal">
+        <div class="p-4 flex justify-between items-center bg-black/80 backdrop-blur safe-top">
+            <button onclick="closeMarginModal()" class="text-white/40 text-sm px-2">取消</button>
+            <span class="text-white text-xs font-bold tracking-widest uppercase">设置边距</span>
+            <button onclick="applyMargin()" class="bg-blue-600 text-white px-5 py-2 rounded-full text-xs font-bold">保存</button>
+        </div>
+        <div class="p-8 bg-zinc-950 safe-bottom">
+            <div class="max-w-xs mx-auto space-y-8">
+                <div>
+                    <div class="flex justify-between text-[10px] text-zinc-500 font-black mb-3"><span>水平间距 (px)</span><span id="marginHLabel" class="text-blue-500">0</span></div>
+                    <input type="range" id="marginH" min="0" max="200" step="1" oninput="updateMarginPreview()" class="w-full">
+                </div>
+                <div>
+                    <div class="flex justify-between text-[10px] text-zinc-500 font-black mb-3"><span>垂直间距 (px)</span><span id="marginVLabel" class="text-blue-500">0</span></div>
+                    <input type="range" id="marginV" min="0" max="200" step="1" oninput="updateMarginPreview()" class="w-full">
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="exportLoading">
         <div class="animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent mb-4"></div>
         <p class="text-sm font-medium">正在生成高清图片...</p>
@@ -269,8 +286,68 @@
         let cropTemp = { x: 0, y: 0, scale: 1, rotate: 0, lastX: 0, lastY: 0, isDragging: false };
         let viewScale = 1;
 
+        // margins between photos, updated via modal
+        let marginH = 0; // horizontal spacing in px
+        let marginV = 0; // vertical spacing in px
+
+        function updateSlotPositions() {
+            const slots = document.querySelectorAll('.photo-slot');
+            // positions based on order p1,p2,p3,p4 with margins applied
+            // marginH/V are used for spacing between photos *and* along the
+            // outer edges so the exported canvas includes a white border.
+            // layout:
+            // p1: marginH, marginV
+            // p2: marginH + SLOT_W + marginH, marginV
+            // p3: marginH, marginV + SLOT_H + marginV
+            // p4: marginH + SLOT_W + marginH, marginV + SLOT_H + marginV
+            slots.forEach(slot => {
+                const id = slot.dataset.id;
+                let top = marginV;
+                let left = marginH;
+                if (id === 'p2' || id === 'p4') left = marginH + SLOT_W + marginH;
+                if (id === 'p3' || id === 'p4') top = marginV + SLOT_H + marginV;
+                slot.style.left = left + 'px';
+                slot.style.top = top + 'px';
+            });
+            updateCanvasSize();
+            updateCutLines();
+        }
+
         const SLOT_W = 300;
         const SLOT_H = 450;
+
+        // whenever margins change we may need to grow the canvas so that the
+        // photos plus the outer white borders still fit.  Update the root
+        // variables used by CSS and also re-scale the viewport.
+        function updateCanvasSize() {
+            const root = document.documentElement;
+            const newW = 2 * SLOT_W + marginH * 3;
+            const newH = 2 * SLOT_H + marginV * 3;
+            root.style.setProperty('--canvas-w', newW + 'px');
+            root.style.setProperty('--canvas-h', newH + 'px');
+            // re‑scale so viewport fits the new size
+            autoScaleCanvas();
+        }
+
+        // move the cut lines so they stay between the four slots rather than
+        // always at 50% of the (potentially enlarged) canvas.
+        function updateCutLines() {
+            const hLine = document.querySelector('.cut-line-h');
+            const vLine = document.querySelector('.cut-line-v');
+            const p1 = document.querySelector('[data-id="p1"]');
+            const p2 = document.querySelector('[data-id="p2"]');
+            const p3 = document.querySelector('[data-id="p3"]');
+            if (hLine && p1 && p3) {
+                const y1 = parseFloat(p1.style.top);
+                const y3 = parseFloat(p3.style.top);
+                hLine.style.top = (y1 + y3 + SLOT_H) / 2 + 'px';
+            }
+            if (vLine && p1 && p2) {
+                const x1 = parseFloat(p1.style.left);
+                const x2 = parseFloat(p2.style.left);
+                vLine.style.left = (x1 + x2 + SLOT_W) / 2 + 'px';
+            }
+        }
 
         function autoScaleCanvas() {
             const container = document.querySelector('.canvas-viewport');
@@ -281,7 +358,10 @@
         }
 
         window.addEventListener('resize', autoScaleCanvas);
-        window.addEventListener('load', autoScaleCanvas);
+        window.addEventListener('load', () => {
+            autoScaleCanvas();
+            updateSlotPositions();
+        });
 
         function selectSlot(slot, e) {
             if (e) e.stopPropagation();
@@ -376,6 +456,32 @@
             document.getElementById('cropRotate').value = cropTemp.rotate || 0;
             updateCropTransform();
             modal.style.display = 'flex';
+        }
+
+        // margin modal controls
+        function openMarginModal() {
+            const modal = document.getElementById('marginModal');
+            document.getElementById('marginH').value = marginH;
+            document.getElementById('marginV').value = marginV;
+            document.getElementById('marginHLabel').innerText = marginH;
+            document.getElementById('marginVLabel').innerText = marginV;
+            modal.style.display = 'flex';
+        }
+
+        function closeMarginModal() { document.getElementById('marginModal').style.display = 'none'; }
+
+        function updateMarginPreview() {
+            const h = parseInt(document.getElementById('marginH').value, 10) || 0;
+            const v = parseInt(document.getElementById('marginV').value, 10) || 0;
+            document.getElementById('marginHLabel').innerText = h;
+            document.getElementById('marginVLabel').innerText = v;
+        }
+
+        function applyMargin() {
+            marginH = parseInt(document.getElementById('marginH').value, 10) || 0;
+            marginV = parseInt(document.getElementById('marginV').value, 10) || 0;
+            updateSlotPositions();
+            closeMarginModal();
         }
 
         function updateCropTransform() {
