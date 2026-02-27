@@ -7,29 +7,43 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
-        :root { --canvas-w: 900px; --canvas-h: 600px; }
+        :root {
+            --canvas-w: 900px;
+            --canvas-h: 600px;
+            --header-h: 56px;
+            --toolbar-h: 0px;
+        }
+
+        * { box-sizing: border-box; }
 
         body {
             touch-action: manipulation;
             -webkit-tap-highlight-color: transparent;
             overscroll-behavior-y: contain;
+            -webkit-font-smoothing: antialiased;
         }
 
         .canvas-viewport {
             width: 100%;
             display: flex;
             justify-content: center;
-            align-items: center;
-            padding: 20px 10px;
-            background: #f8fafc;
-            min-height: calc(100vh - 56px);
+            align-items: flex-start;
+            padding: 0 12px;
+            background: #f1f5f9;
             overflow: hidden;
+            position: relative;
+            /* Height is set dynamically by JS */
         }
 
         .canvas-scaler {
-            transform-origin: center center;
+            transform-origin: top center;
             transition: transform 0.2s ease;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+            border-radius: 2px;
+            position: absolute;
+            top: 0;
+            left: 50%;
+            /* translateX(-50%) is prepended in JS so canvas stays centered */
         }
 
         .photo-canvas {
@@ -45,7 +59,7 @@
             display: flex; flex-direction: column;
             align-items: center; justify-content: center;
             color: #cbd5e1; pointer-events: none;
-            gap: 8px;
+            gap: 10px;
         }
 
         .cell-wrap {
@@ -67,14 +81,59 @@
             position: fixed; bottom: 0; left: 0; right: 0;
             background: #fff;
             border-top: 1px solid #e2e8f0;
-            box-shadow: 0 -4px 20px rgba(0,0,0,0.06);
+            box-shadow: 0 -2px 16px rgba(0,0,0,0.08);
             display: none;
-            padding: 10px 16px;
-            padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+            padding: 8px 20px;
+            padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
             z-index: 50;
-            gap: 10px;
+            gap: 8px;
+            align-items: center;
         }
-        #toolbar.visible { display: flex; }
+
+        #toolbar .toolbar-btn {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 4px;
+            border-radius: 12px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+            transition: background 0.15s;
+            min-height: 56px;
+            justify-content: center;
+        }
+
+        #toolbar .toolbar-btn:active {
+            background: #f1f5f9;
+        }
+
+        #toolbar .toolbar-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f1f5f9;
+            color: #475569;
+            transition: transform 0.15s, background 0.15s;
+        }
+
+        #toolbar .toolbar-btn:active .toolbar-icon {
+            transform: scale(0.88);
+            background: #e2e8f0;
+        }
+
+        #toolbar .toolbar-label {
+            font-size: 10px;
+            font-weight: 700;
+            color: #64748b;
+            letter-spacing: 0.02em;
+        }
 
         /* Export loading */
         #exportLoading {
@@ -85,18 +144,50 @@
             flex-direction: column;
             align-items: center; justify-content: center;
             color: white;
-            backdrop-filter: blur(5px);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
         }
 
-        input[type=range] { -webkit-appearance: none; appearance: none; background: transparent; }
-        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; background: #333; border-radius: 2px; }
-        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; background: #3b82f6; margin-top: -8px; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
+        input[type=range] {
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+            width: 100%;
+            height: 28px;
+            cursor: pointer;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px;
+            background: #3f3f46;
+            border-radius: 2px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 24px; width: 24px;
+            border-radius: 50%;
+            background: #3b82f6;
+            margin-top: -10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+        }
 
         /* Crop modal */
         .crop-modal {
             position: fixed; inset: 0;
             background: #000; z-index: 1000;
             display: none; flex-direction: column;
+        }
+
+        .crop-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            padding-top: calc(12px + env(safe-area-inset-top, 0px));
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            flex-shrink: 0;
+            min-height: 56px;
         }
 
         #cropSizer { overflow: hidden; flex-shrink: 0; }
@@ -109,8 +200,8 @@
 
         #cropBox {
             position: absolute; inset: 0;
-            border: 1px solid #3b82f6;
-            box-shadow: 0 0 0 5000px rgba(0,0,0,0.8);
+            border: 1.5px solid #3b82f6;
+            box-shadow: 0 0 0 5000px rgba(0,0,0,0.75);
             z-index: 20; pointer-events: none;
         }
 
@@ -121,73 +212,176 @@
             max-width: none !important;
             max-height: none !important;
         }
+
+        .crop-controls {
+            background: #0a0a0a;
+            padding: 20px 24px;
+            padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+            flex-shrink: 0;
+        }
+
+        .crop-controls .control-row {
+            margin-bottom: 16px;
+        }
+
+        .crop-controls .control-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .crop-controls .control-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            font-weight: 800;
+            color: #71717a;
+            margin-bottom: 8px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .crop-controls .control-label span:last-child {
+            color: #3b82f6;
+        }
+
+        /* Header selects - mobile friendly */
+        .header-select {
+            font-size: 11px;
+            background: #f1f5f9;
+            border: none;
+            border-radius: 8px;
+            padding: 5px 8px;
+            font-weight: 700;
+            color: #374151;
+            -webkit-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2394a3b8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 6px center;
+            padding-right: 20px;
+            max-width: 130px;
+        }
+
+        .header-select.quality-select {
+            color: #2563eb;
+            max-width: 160px;
+        }
+
+        /* Export button */
+        .export-btn {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+            padding: 8px 18px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 700;
+            border: none;
+            box-shadow: 0 2px 8px rgba(59,130,246,0.4);
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+            white-space: nowrap;
+            -webkit-tap-highlight-color: transparent;
+            min-height: 36px;
+        }
+
+        .export-btn:active {
+            transform: scale(0.93);
+            box-shadow: 0 1px 4px rgba(59,130,246,0.3);
+        }
+
+        /* Upload hint tap area */
+        .upload-hint {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            padding: 32px;
+            cursor: pointer;
+        }
+
+        .upload-hint-icon {
+            width: 64px;
+            height: 64px;
+            background: #e2e8f0;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #94a3b8;
+        }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen flex flex-col">
 
     <!-- Header -->
-    <header class="bg-white/90 backdrop-blur sticky top-0 z-40 px-4 py-3 flex justify-between items-center border-b border-slate-200 shadow-sm">
-        <div class="flex flex-col">
-            <h1 class="text-sm font-bold text-slate-800">证件照（6寸横版）</h1>
-            <div class="flex items-center gap-2 mt-0.5">
-                <span class="text-[10px] text-slate-400">底图 6×4</span>
-                <select id="exportQuality" class="text-[10px] bg-slate-100 border-none rounded px-1 py-0.5 font-bold text-blue-600 focus:ring-0">
-                    <option value="1">预览 (900×600)</option>
-                    <option value="2">高清 (1800×1200 / 300DPI)</option>
-                    <option value="3" selected>超清 (2700×1800 / 450DPI)</option>
-                </select>
+    <header class="bg-white/95 backdrop-blur sticky top-0 z-40 border-b border-slate-200 shadow-sm" style="padding: 10px 14px; padding-top: calc(10px + env(safe-area-inset-top, 0px));">
+        <div class="flex justify-between items-center gap-2">
+            <div class="flex flex-col min-w-0">
+                <h1 class="text-sm font-bold text-slate-800 leading-tight">证件照排版</h1>
+                <div class="flex items-center gap-1.5 mt-0.5">
+                    <span class="text-[10px] text-slate-400 shrink-0">6寸横版</span>
+                    <select id="exportQuality" class="header-select quality-select focus:ring-0 focus:outline-none">
+                        <option value="1">预览 900×600</option>
+                        <option value="2">高清 1800×1200</option>
+                        <option value="3" selected>超清 2700×1800</option>
+                    </select>
+                </div>
             </div>
-        </div>
-        <div class="flex items-center gap-2">
-            <select id="photoSizeSelect" class="text-[10px] bg-slate-100 border-none rounded px-2 py-1 font-bold text-zinc-700 focus:ring-0">
-                <option data-w="148" data-h="207" selected>一寸照 25×35mm</option>
-                <option data-w="195" data-h="284">小一寸 33×48mm</option>
-                <option data-w="207" data-h="290">二寸照 35×49mm</option>
-                <option data-w="206" data-h="266">小二寸 35×45mm</option>
-                <option data-w="179" data-h="221">身份证照 26×32mm</option>
-                <option data-w="130" data-h="189">驾驶证照 22×32mm</option>
-                <option data-w="195" data-h="284">护照照 33×48mm</option>
-                <option data-w="300" data-h="300">美国签证 51×51mm</option>
-                <option data-w="266" data-h="266">日本签证 45×45mm</option>
-                <option data-w="600" data-h="800">香港旅行 40×50mm</option>
-            </select>
-            <button onclick="exportPhoto()" class="bg-blue-600 text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-md active:scale-95 transition">导出</button>
+            <div class="flex items-center gap-2 shrink-0">
+                <select id="photoSizeSelect" class="header-select focus:ring-0 focus:outline-none">
+                    <option data-w="148" data-h="207" selected>一寸 25×35</option>
+                    <option data-w="195" data-h="284">小一寸 33×48</option>
+                    <option data-w="207" data-h="290">二寸 35×49</option>
+                    <option data-w="206" data-h="266">小二寸 35×45</option>
+                    <option data-w="179" data-h="221">身份证 26×32</option>
+                    <option data-w="130" data-h="189">驾驶证 22×32</option>
+                    <option data-w="195" data-h="284">护照 33×48</option>
+                    <option data-w="300" data-h="300">美签 51×51</option>
+                    <option data-w="266" data-h="266">日签 45×45</option>
+                    <option data-w="600" data-h="800">港旅行 40×50</option>
+                </select>
+                <button onclick="exportPhoto()" class="export-btn">导出</button>
+            </div>
         </div>
     </header>
 
-    <!-- Canvas area — click only triggers upload when no image -->
-    <main class="flex-1 canvas-viewport" id="canvasViewport">
-        <!-- Placeholder lives outside photoCanvas so innerHTML='' won't remove it -->
-        <div id="placeholder" class="placeholder" style="position:absolute;inset:0;pointer-events:none;">
-            <svg class="w-12 h-12 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-            </svg>
-            <span class="text-sm font-semibold">点击上传照片</span>
-        </div>
-        <div id="scaler" class="canvas-scaler">
-            <div id="photoCanvas" class="photo-canvas"></div>
+    <!-- Canvas area -->
+    <main class="canvas-viewport" id="canvasViewport">
+        <div id="scalerWrap" style="position:relative;flex-shrink:0;overflow:hidden;">
+            <div id="scaler" class="canvas-scaler">
+                <div id="photoCanvas" class="photo-canvas"></div>
+            </div>
+            <!-- Placeholder overlays the canvas exactly, hidden once image is loaded -->
+            <div id="placeholder" onclick="triggerUpload()" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;background:#f8fafc;border-radius:2px;">
+                <div class="upload-hint-icon" style="margin-bottom:12px;">
+                    <svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                </div>
+                <p style="font-size:15px;font-weight:700;color:#475569;margin:0 0 4px;">点击上传照片</p>
+                <p style="font-size:11px;color:#94a3b8;margin:0;">支持 JPG / PNG / HEIC</p>
+            </div>
         </div>
     </main>
 
     <!-- Bottom toolbar (visible after image loaded) -->
     <div id="toolbar" style="display:none">
         <!-- Upload new photo -->
-        <button onclick="triggerUpload()" class="flex flex-col items-center gap-1 flex-1 group">
-            <div class="w-10 h-10 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center group-active:scale-90 transition">
-                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        <button class="toolbar-btn" onclick="triggerUpload()">
+            <div class="toolbar-icon">
+                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                 </svg>
             </div>
-            <span class="text-[10px] font-bold text-slate-500">换图</span>
+            <span class="toolbar-label">换图</span>
         </button>
         <!-- Crop -->
-        <button onclick="openCropModal()" class="flex flex-col items-center gap-1 flex-1 group">
-            <div class="w-10 h-10 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center group-active:scale-90 transition">
-                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path d="M6 3v15M18 6v15M3 6h15M6 18h15"/>
+        <button class="toolbar-btn" onclick="openCropModal()">
+            <div class="toolbar-icon">
+                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 3v15M18 6v15M3 6h15M6 18h15"/>
                 </svg>
             </div>
-            <span class="text-[10px] font-bold text-slate-500">裁剪</span>
+            <span class="toolbar-label">裁剪</span>
         </button>
     </div>
 
@@ -202,12 +396,12 @@
 
     <!-- Crop modal -->
     <div id="cropModal" class="crop-modal">
-        <div class="p-4 flex justify-between items-center bg-black/80 backdrop-blur">
-            <button onclick="closeCropModal()" class="text-white/40 text-sm px-2">取消</button>
-            <span class="text-white text-xs font-bold tracking-widest uppercase">裁剪照片</span>
-            <button onclick="applyCrop()" class="bg-blue-600 text-white px-5 py-2 rounded-full text-xs font-bold">保存</button>
+        <div class="crop-modal-header">
+            <button onclick="closeCropModal()" style="color:rgba(255,255,255,0.5);font-size:14px;padding:8px 12px;border-radius:8px;background:none;border:none;cursor:pointer;min-height:40px;min-width:60px;">取消</button>
+            <span style="color:white;font-size:13px;font-weight:700;letter-spacing:0.08em;">裁剪照片</span>
+            <button onclick="applyCrop()" style="background:#2563eb;color:white;padding:8px 20px;border-radius:20px;font-size:13px;font-weight:700;border:none;cursor:pointer;min-height:40px;">保存</button>
         </div>
-        <div class="flex-1 flex items-center justify-center overflow-hidden p-4" id="cropViewport">
+        <div class="flex-1 flex items-center justify-center overflow-hidden" id="cropViewport" style="padding:12px;">
             <div id="cropSizer">
                 <div id="cropWrapper">
                     <img id="cropPreviewImg" src="" draggable="false">
@@ -215,17 +409,17 @@
                 </div>
             </div>
         </div>
-        <div class="p-8 bg-zinc-950" style="padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px))">
-            <div class="max-w-xs mx-auto space-y-6">
-                <div>
-                    <div class="flex justify-between text-[10px] text-zinc-500 font-black mb-2">
-                        <span>缩放</span><span id="zoomLabel" class="text-blue-500">1.0x</span>
+        <div class="crop-controls">
+            <div style="max-width:360px;margin:0 auto;">
+                <div class="control-row">
+                    <div class="control-label">
+                        <span>缩放</span><span id="zoomLabel">1.0x</span>
                     </div>
                     <input type="range" id="cropZoom" min="0.1" max="3" step="0.01" oninput="updateCropTransform()">
                 </div>
-                <div>
-                    <div class="flex justify-between text-[10px] text-zinc-500 font-black mb-2">
-                        <span>旋转</span><span id="rotateLabel" class="text-blue-500">0°</span>
+                <div class="control-row">
+                    <div class="control-label">
+                        <span>旋转</span><span id="rotateLabel">0°</span>
                     </div>
                     <input type="range" id="cropRotate" min="-180" max="180" step="1" oninput="updateCropTransform()">
                 </div>
@@ -250,20 +444,51 @@
         let cropTemp = { x: 0, y: 0, scale: 1, rotate: 0, isDragging: false, lastX: 0, lastY: 0 };
 
         // ─── Canvas scaling ───────────────────────────────────────────────────
+        function getToolbarHeight() {
+            const tb = document.getElementById('toolbar');
+            if (!tb || tb.style.display === 'none') return 0;
+            return tb.offsetHeight || 0;
+        }
+
         function autoScaleCanvas() {
             const container = document.getElementById('canvasViewport');
             const scaler = document.getElementById('scaler');
-            const cw = container.clientWidth - 20;
-            const scale = Math.min(cw / CANVAS_W, 1);
-            scaler.style.transform = `scale(${scale})`;
-            scaler.style.marginBottom = `${(CANVAS_H * scale) - CANVAS_H}px`;
+            const wrap = document.getElementById('scalerWrap');
+            const toolbarH = getToolbarHeight();
+            const headerH = document.querySelector('header').offsetHeight || 56;
+
+            const vPad = 24;
+            const availW = window.innerWidth - 24;
+            const availH = window.innerHeight - headerH - toolbarH - vPad;
+
+            const scale = Math.min(availW / CANVAS_W, availH / CANVAS_H, 1);
+
+            const scaledW = Math.round(CANVAS_W * scale);
+            const scaledH = Math.round(CANVAS_H * scale);
+
+            // left:50% + translateX(-50%) centers the canvas, then scale from top center
+            scaler.style.transform = `translateX(-50%) scale(${scale})`;
+
+            // Wrapper takes up exactly the scaled footprint
+            wrap.style.width = scaledW + 'px';
+            wrap.style.height = scaledH + 'px';
+
+            // Add top padding so canvas isn't flush against header
+            wrap.style.marginTop = `${Math.round(vPad / 2)}px`;
+
+            // Viewport height = scaled canvas + top/bottom padding
+            container.style.height = `${scaledH + vPad}px`;
+            container.style.minHeight = '';
         }
         window.addEventListener('resize', autoScaleCanvas);
         window.addEventListener('load', autoScaleCanvas);
 
         // ─── Upload ───────────────────────────────────────────────────────────
-        document.getElementById('canvasViewport').addEventListener('click', () => {
-            if (!rawImageSrc) triggerUpload();
+        // Only trigger upload via canvas tap when no image is loaded yet
+        document.getElementById('canvasViewport').addEventListener('click', (e) => {
+            if (!rawImageSrc && e.target === document.getElementById('canvasViewport')) {
+                triggerUpload();
+            }
         });
 
         function triggerUpload() {
@@ -311,8 +536,10 @@
 
         function showToolbar() {
             document.getElementById('placeholder').style.display = 'none';
-            document.getElementById('toolbar').style.display = 'flex';
-            autoScaleCanvas();
+            const toolbar = document.getElementById('toolbar');
+            toolbar.style.display = 'flex';
+            // Re-scale after toolbar appears so canvas doesn't get hidden behind it
+            requestAnimationFrame(() => autoScaleCanvas());
         }
 
         // ─── Crop modal ───────────────────────────────────────────────────────
@@ -333,8 +560,11 @@
                 wrapper.style.width = cropCellW + 'px';
                 wrapper.style.height = cropCellH + 'px';
 
-                const screenW = window.innerWidth * 0.85;
-                const screenH = window.innerHeight * 0.5;
+                // Reserve ~200px for controls + header; use remaining space for preview
+                const controlsH = 180;
+                const headerH = 56;
+                const screenW = window.innerWidth * 0.88;
+                const screenH = window.innerHeight - controlsH - headerH - 24;
                 viewScale = Math.min(screenW / cropCellW, screenH / cropCellH);
                 wrapper.style.transform = `scale(${viewScale})`;
 
