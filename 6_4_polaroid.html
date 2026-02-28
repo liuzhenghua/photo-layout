@@ -8,7 +8,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Ma+Shan+Zheng&family=Pacifico&family=ZCOOL+KuaiLe&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Long+Cang&family=Ma+Shan+Zheng&family=Pacifico&family=ZCOOL+KuaiLe&family=ZCOOL+QingKe+HuangYou&family=ZCOOL+XiaoWei&display=swap" rel="stylesheet">
   <style>
     :root {
       --canvas-w: 900px;
@@ -145,9 +145,12 @@
         </div>
         <div class="flex items-center gap-2">
           <label class="text-xs text-slate-500 font-bold w-14">字体1</label>
-          <select id="font1Select" onchange="updateActiveCaptionFromControls()" class="flex-1 text-xs border border-slate-300 rounded-lg px-2 py-2 bg-white">
+          <select id="font1Select" onchange="updateActiveCaptionFromControls()" class="flex-1 text-xs border border-slate-300 rounded-lg px-2 py-2.5 min-h-[40px] bg-white">
             <option value="'Ma Shan Zheng', cursive">马善政</option>
             <option value="'ZCOOL KuaiLe', cursive">站酷快乐体</option>
+            <option value="'ZCOOL XiaoWei', serif">站酷小薇体</option>
+            <option value="'ZCOOL QingKe HuangYou', cursive">站酷庆科黄油体</option>
+            <option value="'Long Cang', cursive">龙藏体</option>
             <option value="'Caveat', cursive">Caveat</option>
             <option value="'Pacifico', cursive">Pacifico</option>
             <option value="'Comic Sans MS', 'Marker Felt', cursive">Handwritten</option>
@@ -162,9 +165,12 @@
         </div>
         <div class="flex items-center gap-2">
           <label class="text-xs text-slate-500 font-bold w-14">字体2</label>
-          <select id="font2Select" onchange="updateActiveCaptionFromControls()" class="flex-1 text-xs border border-slate-300 rounded-lg px-2 py-2 bg-white" disabled>
+          <select id="font2Select" onchange="updateActiveCaptionFromControls()" class="flex-1 text-xs border border-slate-300 rounded-lg px-2 py-2.5 min-h-[40px] bg-white" disabled>
             <option value="'Ma Shan Zheng', cursive">马善政</option>
             <option value="'ZCOOL KuaiLe', cursive">站酷快乐体</option>
+            <option value="'ZCOOL XiaoWei', serif">站酷小薇体</option>
+            <option value="'ZCOOL QingKe HuangYou', cursive">站酷庆科黄油体</option>
+            <option value="'Long Cang', cursive">龙藏体</option>
             <option value="'Caveat', cursive">Caveat</option>
             <option value="'Pacifico', cursive">Pacifico</option>
             <option value="'Comic Sans MS', 'Marker Felt', cursive">Handwritten</option>
@@ -324,6 +330,10 @@
     function pickRandomText() {
       return TEXT_POOL[Math.floor(Math.random() * TEXT_POOL.length)];
     }
+    function pickRandomFont() {
+      const options = Array.from(document.getElementById("font1Select").options).map(o => o.value);
+      return options[Math.floor(Math.random() * options.length)];
+    }
 
     function syncControlsFromActive() {
       const s = textStates.get(activeCard);
@@ -371,7 +381,9 @@
     function randomizeActiveText() {
       const s = textStates.get(activeCard);
       s.line1 = pickRandomText();
+      s.font1 = pickRandomFont();
       if (s.line2Enabled) s.line2 = pickRandomText();
+      if (s.line2Enabled) s.font2 = pickRandomFont();
       syncControlsFromActive();
       renderCaption(activeCard);
     }
