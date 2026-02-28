@@ -30,13 +30,13 @@
       width: 100%;
       display: flex;
       justify-content: center;
-      align-items: center;
-      padding: 8px;
+      align-items: flex-start;
+      padding: 0;
       background: #f8fafc;
       min-height: 0;
       overflow: hidden;
     }
-    .canvas-scaler { transform-origin: center center; transition: transform 0.2s ease; }
+    .canvas-scaler { transform-origin: top center; transition: transform 0.2s ease; }
     .photo-canvas { width: var(--canvas-w); height: var(--canvas-h); position: relative; overflow: hidden; background: #fff; }
     .polaroid { position: absolute; width: 360px; height: var(--card-h); background: #fff; padding: 14px 14px var(--caption-space) 14px; cursor: pointer; user-select: none; }
     .polaroid.active { box-shadow: inset 0 0 0 4px #3b82f6; }
@@ -311,10 +311,11 @@
       const viewport = document.querySelector(".canvas-viewport");
       const scaler = document.getElementById("scaler");
       const area = document.getElementById("captureArea");
-      const widthScale = (viewport.clientWidth - 12) / area.offsetWidth;
-      const heightScale = (viewport.clientHeight - 12) / area.offsetHeight;
+      const widthScale = (viewport.clientWidth - 4) / area.offsetWidth;
+      const heightScale = (viewport.clientHeight - 4) / area.offsetHeight;
       const scale = Math.min(widthScale, heightScale, 1);
       scaler.style.transform = `scale(${scale})`;
+      scaler.style.marginTop = "0";
     }
 
     function pickRandomText() {
