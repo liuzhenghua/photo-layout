@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>6寸竖版单拍立得</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Long+Cang&family=Ma+Shan+Zheng&family=Pacifico&family=ZCOOL+KuaiLe&family=ZCOOL+QingKe+HuangYou&family=ZCOOL+XiaoWei&display=swap" rel="stylesheet">
+  <style>
+    :root { --canvas-w: 600px; --canvas-h: 900px; --card-w: 460px; --card-h: 720px; --caption-space: 120px; --caption-min-h: 82px; }
+    html, body { height: 100%; overflow: hidden; }
+    body { margin: 0; touch-action: manipulation; -webkit-tap-highlight-color: transparent; overscroll-behavior-y: contain; height: 100dvh; display: flex; flex-direction: column; }
+    .canvas-viewport { width: 100%; display: flex; justify-content: center; align-items: flex-start; padding: 8px; background: #f8fafc; min-height: 0; overflow: hidden; }
+    .safe-bottom { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+    .canvas-scaler { transform-origin: top center; transition: transform 0.2s ease; }
+    .photo-canvas { width: var(--canvas-w); height: var(--canvas-h); position: relative; overflow: hidden; background: #fff; }
+    .polaroid { position: absolute; width: var(--card-w); height: var(--card-h); background: #fff; padding: 14px 14px var(--caption-space) 14px; box-shadow: inset 0 0 0 4px #3b82f6; }
+    .photo-area { width: 100%; height: 100%; background: #f1f5f9; overflow: hidden; position: relative; }
+    .photo-area img { position: absolute; top: 0; left: 0; transform-origin: center center; max-width: none !important; max-height: none !important; display: none; pointer-events: none; }
+    .placeholder { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #94a3b8; border: 1px dashed #cbd5e1; font-size: 12px; font-weight: 700; }
+    .caption { position: absolute; left: 20px; right: 20px; bottom: 18px; min-height: var(--caption-min-h); padding-top: 8px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; pointer-events: none; }
+    .caption.double-line { transform: translateY(-6px); }
+    .caption-line { max-width: 100%; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.05; }
+    .caption-line.line1 { font-size: 34px; }
+    .caption-line.line2 { font-size: 26px; display: none; }
+
+    .crop-modal { position: fixed; inset: 0; background: #000; z-index: 1000; display: none; flex-direction: column; }
+    #cropWrapper { position: relative; transform-origin: center center; background: #111; overflow: hidden; flex-shrink: 0; }
+    #cropPreviewImg { position: absolute; top: 0; left: 0; cursor: move; touch-action: none; transform-origin: center center; max-width: none !important; max-height: none !important; }
+    #cropBox { position: absolute; inset: 0; border: 2px solid #3b82f6; box-shadow: 0 0 0 5000px rgba(0,0,0,0.8); z-index: 20; pointer-events: none; }
+
+    .font-picker-btn { width: 100%; min-height: 44px; font-size: 14px; line-height: 1.2; border: 1px solid #cbd5e1; border-radius: 0.5rem; background: #fff; padding: 10px 36px 10px 10px; text-align: left; position: relative; cursor: pointer; }
+    .font-picker-btn::after { content: "▾"; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: #64748b; font-size: 12px; pointer-events: none; }
+    .font-picker-btn.disabled { opacity: 0.5; cursor: not-allowed; }
+    .font-menu { position: absolute; left: 0; right: 0; top: calc(100% + 4px); max-height: 220px; overflow: auto; background: #fff; border: 1px solid #cbd5e1; border-radius: 0.5rem; box-shadow: 0 10px 24px rgba(0,0,0,0.12); z-index: 9999; }
+    .font-menu.up { top: auto; bottom: calc(100% + 4px); }
+    .font-menu button { width: 100%; border: none; background: #fff; text-align: left; padding: 10px; font-size: 14px; cursor: pointer; }
+    .font-menu button:hover { background: #f1f5f9; }
+
+    #exportLoading { display: none; position: fixed; inset: 0; background: rgba(2,6,23,0.8); z-index: 2000; flex-direction: column; align-items: center; justify-content: center; color: #fff; }
+    input[type=range] { -webkit-appearance: none; background: transparent; }
+    input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 6px; background: #333; border-radius: 3px; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: #3b82f6; margin-top: -8px; }
+    @media (max-width: 768px) { .font-picker-btn { font-size: 16px; } }
+  </style>
+</head>
+<body class="bg-slate-50">
+  <header class="bg-white/90 backdrop-blur sticky top-0 z-40 px-4 py-3 flex justify-between items-center border-b border-slate-200">
+    <div>
+      <h1 class="text-sm font-bold text-slate-800">6寸竖版单拍立得</h1>
+      <select id="exportQuality" class="text-[10px] bg-slate-100 border-none rounded px-1 py-0.5 font-bold text-blue-600 focus:ring-0">
+        <option value="1">预览 (600x900)</option>
+        <option value="2">高清 (1200x1800 / 300DPI)</option>
+        <option value="3" selected>超清 (1800x2700 / 450DPI)</option>
+      </select>
+    </div>
+    <div class="flex items-center gap-2">
+      <button onclick="openMarginModal()" class="bg-gray-200 text-gray-700 px-4 py-1.5 rounded-full text-xs font-bold shadow-md active:scale-95 transition">边距</button>
+      <button onclick="exportPhoto()" class="bg-blue-600 text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-md active:scale-95 transition">导出</button>
+    </div>
+  </header>
+
+  <main class="flex-1 canvas-viewport pb-[320px] md:pb-[260px]">
+    <div id="scaler" class="canvas-scaler">
+      <div id="captureArea" class="photo-canvas">
+        <div id="card1" class="polaroid">
+          <div class="photo-area" onclick="uploadPhoto()">
+            <div class="placeholder">点击上传照片</div>
+            <img alt="photo-1">
+          </div>
+          <div class="caption">
+            <div id="captionLine1" class="caption-line line1"></div>
+            <div id="captionLine2" class="caption-line line2"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <section id="controlPanel" class="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-slate-200 p-3 shadow-[0_-10px_28px_rgba(0,0,0,0.10)] max-h-[46dvh] overflow-visible safe-bottom">
+    <div class="max-w-4xl mx-auto space-y-2">
+      <div class="flex items-center gap-2">
+        <button onclick="uploadPhoto()" class="px-3 py-2 text-xs rounded-lg bg-blue-50 text-blue-700 font-bold">更换照片</button>
+        <button onclick="openCropModal()" class="px-3 py-2 text-xs rounded-lg bg-slate-100 text-slate-700 font-bold">裁剪照片</button>
+        <button onclick="randomizeText()" class="px-3 py-2 text-xs rounded-lg bg-slate-100 text-slate-700 font-bold">随机文案</button>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <div class="flex items-center gap-2">
+          <label class="text-xs text-slate-500 font-bold w-14">第一行</label>
+          <input id="line1Input" type="text" class="flex-1 text-xs border border-slate-300 rounded-lg px-2 py-2" placeholder="请输入第一行文字" oninput="updateCaptionFromControls()">
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="text-xs text-slate-500 font-bold w-14">字体1</label>
+          <div class="flex-1 relative">
+            <button id="font1Btn" type="button" class="font-picker-btn" onclick="toggleFontMenu(1, event)" data-value="'Ma Shan Zheng', cursive">马善政</button>
+            <div id="font1Menu" class="font-menu hidden"></div>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="inline-flex items-center gap-2 text-xs text-slate-600 font-bold">
+            <input id="line2Enable" type="checkbox" onchange="toggleSecondLine()"> 启用第二行
+          </label>
+          <input id="line2Input" type="text" class="flex-1 text-xs border border-slate-300 rounded-lg px-2 py-2" placeholder="请输入第二行文字" oninput="updateCaptionFromControls()" disabled>
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="text-xs text-slate-500 font-bold w-14">字体2</label>
+          <div class="flex-1 relative">
+            <button id="font2Btn" type="button" class="font-picker-btn disabled" onclick="toggleFontMenu(2, event)" data-value="'ZCOOL KuaiLe', cursive">站酷快乐体</button>
+            <div id="font2Menu" class="font-menu hidden"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="marginModal" class="crop-modal">
+    <div class="p-4 flex justify-between items-center bg-black/80 backdrop-blur">
+      <button onclick="closeMarginModal()" class="text-white/40 text-sm px-2">取消</button>
+      <span class="text-white text-xs font-bold tracking-widest uppercase">设置边距</span>
+      <button onclick="applyMargin()" class="bg-blue-600 text-white px-5 py-2 rounded-full text-xs font-bold">保存</button>
+    </div>
+    <div class="p-8 bg-zinc-950">
+      <div class="max-w-xs mx-auto space-y-8">
+        <div><div class="flex justify-between text-[10px] text-zinc-500 font-black mb-3"><span>水平边距 (px)</span><span id="marginHLabel" class="text-blue-500">20</span></div><input type="range" id="marginH" min="0" max="120" step="1" oninput="updateMarginPreview()" class="w-full"></div>
+        <div><div class="flex justify-between text-[10px] text-zinc-500 font-black mb-3"><span>垂直边距 (px)</span><span id="marginVLabel" class="text-blue-500">10</span></div><input type="range" id="marginV" min="0" max="120" step="1" oninput="updateMarginPreview()" class="w-full"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="cropModal" class="crop-modal">
+    <div class="p-4 flex justify-between items-center bg-black/80 backdrop-blur">
+      <button onclick="closeCropModal()" class="text-white/40 text-sm px-2">取消</button>
+      <span class="text-white text-xs font-bold tracking-widest uppercase">裁剪照片</span>
+      <button onclick="applyCrop()" class="bg-blue-600 text-white px-5 py-2 rounded-full text-xs font-bold">保存</button>
+    </div>
+    <div class="flex-1 flex items-center justify-center overflow-hidden p-4" id="cropViewport">
+      <div id="cropWrapper"><img id="cropPreviewImg" src="" draggable="false"><div id="cropBox"></div></div>
+    </div>
+    <div class="p-8 bg-zinc-950">
+      <div class="max-w-xs mx-auto space-y-8">
+        <div><div class="flex justify-between text-[10px] text-zinc-500 font-black mb-3"><span>缩放</span><span id="zoomLabel" class="text-blue-500">1.0X</span></div><input type="range" id="cropZoom" min="0.1" max="3" step="0.01" oninput="updateCropTransform()" class="w-full"></div>
+        <div><div class="flex justify-between text-[10px] text-zinc-500 font-black mb-3"><span>旋转</span><span id="rotateLabel" class="text-blue-500">0°</span></div><input type="range" id="cropRotate" min="-180" max="180" step="1" oninput="updateCropTransform()" class="w-full"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="exportLoading"><div class="animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent mb-4"></div><p class="text-sm font-medium">正在生成图片...</p></div>
+  <input id="file1" type="file" accept="image/*" class="hidden" onchange="handleFile(event)">
+
+  <script>
+    const FONT_OPTIONS = [
+      { label: "马善政", value: "'Ma Shan Zheng', cursive" }, { label: "站酷快乐体", value: "'ZCOOL KuaiLe', cursive" },
+      { label: "站酷小薇体", value: "'ZCOOL XiaoWei', serif" }, { label: "站酷庆科黄油体", value: "'ZCOOL QingKe HuangYou', cursive" },
+      { label: "龙藏体", value: "'Long Cang', cursive" }, { label: "Caveat", value: "'Caveat', cursive" },
+      { label: "Pacifico", value: "'Pacifico', cursive" }, { label: "Handwritten", value: "'Comic Sans MS', 'Marker Felt', cursive" }
+    ];
+    const TEXT_POOL = ["今日份快乐","周末散步","天晴有风","你在身边","生活是礼物","路过好风景","记录这一刻","小确幸","今天也很可爱","正在发光","Good Day","Hello Weekend","Love This Moment","Stay Golden","今日份快乐 😊","碎片日常 📸","刚好遇见你 💙","快乐加载中 ✨","普通但珍贵 🤍","好天气营业中 🌤️","可爱超标 🐾","这张超喜欢 😍","把日子拍成诗","慢慢来比较快","出发去浪漫 🎈","见面就是礼物 🎁","Keep the sparkle","Small wins count","好事会发生","镜头懂我","平安喜乐","咔嚓是快乐开关"];
+    let frameW = 432, frameH = 586, marginH = 20, marginV = 10, previewMarginH = 20, previewMarginV = 10;
+    const photoState = { x: 0, y: 0, scale: 1, rotate: 0 };
+    const textState = { line1: "今日份快乐", line2Enabled: false, line2: "", font1: "'Ma Shan Zheng', cursive", font2: "'ZCOOL KuaiLe', cursive" };
+    let cropNaturalW = 0, cropNaturalH = 0, viewScale = 1, cropTemp = { x: 0, y: 0, scale: 1, rotate: 0, lastX: 0, lastY: 0, isDragging: false };
+
+    function updateCardGeometry(v = marginV) {
+      const root = document.documentElement;
+      const cardH = Math.max(640, Math.min(820, 840 - v));
+      const captionSpace = Math.max(110, Math.min(170, 170 - Math.floor(v * 0.5)));
+      const captionMinH = Math.max(74, captionSpace - 28);
+      frameH = cardH - 14 - captionSpace;
+      root.style.setProperty("--card-h", `${cardH}px`);
+      root.style.setProperty("--caption-space", `${captionSpace}px`);
+      root.style.setProperty("--caption-min-h", `${captionMinH}px`);
+    }
+    function updateCardLayout(h = marginH, v = marginV) { const card = document.getElementById("card1"); card.style.left = `${h}px`; card.style.top = `${v}px`; }
+    function updateCanvasSize(h = marginH, v = marginV) { const cardH = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--card-h"), 10) || 720; document.documentElement.style.setProperty("--canvas-w", `${460 + h * 2}px`); document.documentElement.style.setProperty("--canvas-h", `${cardH + v * 2}px`); autoScaleCanvas(); }
+
+    function openMarginModal() { previewMarginH = marginH; previewMarginV = marginV; marginH.value = previewMarginH; marginV.value = previewMarginV; marginHLabel.innerText = previewMarginH; marginVLabel.innerText = previewMarginV; marginModal.style.display = "flex"; }
+    function closeMarginModal() { updateCardLayout(marginH, marginV); marginModal.style.display = "none"; }
+    function updateMarginPreview() { previewMarginH = parseInt(marginH.value, 10) || 0; previewMarginV = parseInt(marginV.value, 10) || 0; marginHLabel.innerText = previewMarginH; marginVLabel.innerText = previewMarginV; updateCardGeometry(previewMarginV); updateCardLayout(previewMarginH, previewMarginV); updateCanvasSize(previewMarginH, previewMarginV); }
+    function applyMargin() { marginH = previewMarginH; marginV = previewMarginV; updateCardGeometry(marginV); updateCardLayout(); updateCanvasSize(); closeMarginModal(); }
+
+    function autoScaleCanvas() { const v = document.querySelector(".canvas-viewport"), s = document.getElementById("scaler"), a = document.getElementById("captureArea"); s.style.transform = `scale(${Math.min((v.clientWidth - 20) / a.offsetWidth, (v.clientHeight - 4) / a.offsetHeight, 1)})`; }
+    function applyImageState() { const img = document.querySelector("#card1 img"); img.style.transform = `translate(${photoState.x}px, ${photoState.y}px) rotate(${photoState.rotate}deg) scale(${photoState.scale})`; }
+    function uploadPhoto() { file1.value = ""; file1.click(); }
+    function handleFile(event) { const file = event.target.files[0]; if (!file) return; const rd = new FileReader(); rd.onload = (e) => { const img = document.querySelector("#card1 img"), ph = document.querySelector("#card1 .placeholder"); img.src = e.target.result; img.style.display = "block"; ph.style.display = "none"; img.onload = () => { const fit = Math.max(frameW / img.naturalWidth, frameH / img.naturalHeight); photoState.x = (frameW - img.naturalWidth) / 2; photoState.y = (frameH - img.naturalHeight) / 2; photoState.scale = fit; photoState.rotate = 0; applyImageState(); }; }; rd.readAsDataURL(file); }
+
+    function pickRandomText() { return TEXT_POOL[Math.floor(Math.random() * TEXT_POOL.length)]; }
+    function pickRandomFont() { return FONT_OPTIONS[Math.floor(Math.random() * FONT_OPTIONS.length)]; }
+    function getFontLabel(v) { const f = FONT_OPTIONS.find(x => x.value === v); return f ? f.label : "选择字体"; }
+    function renderFontMenus() {
+      font1Menu.innerHTML = FONT_OPTIONS.map(f => `<button type="button" onclick="setFont(1,'${f.value.replace(/'/g, "\\'")}','${f.label}')">${f.label}</button>`).join("");
+      font2Menu.innerHTML = FONT_OPTIONS.map(f => `<button type="button" onclick="setFont(2,'${f.value.replace(/'/g, "\\'")}','${f.label}')">${f.label}</button>`).join("");
+    }
+    function closeFontMenus() { font1Menu.classList.add("hidden"); font2Menu.classList.add("hidden"); }
+    function toggleFontMenu(line, e) { e.stopPropagation(); const btn = document.getElementById(`font${line}Btn`); if (btn.classList.contains("disabled")) return; const menu = document.getElementById(`font${line}Menu`); const open = menu.classList.contains("hidden"); closeFontMenus(); if (open) { const r = btn.getBoundingClientRect(); menu.classList.toggle("up", (window.innerHeight - r.bottom) < 232); menu.classList.remove("hidden"); } }
+    function setFont(line, value, label) { const btn = document.getElementById(`font${line}Btn`); btn.dataset.value = value; btn.textContent = label; closeFontMenus(); updateCaptionFromControls(); }
+
+    function renderCaption() {
+      captionLine1.innerText = textState.line1 || " ";
+      captionLine1.style.fontFamily = textState.font1;
+      captionLine2.innerText = textState.line2 || " ";
+      captionLine2.style.fontFamily = textState.font2;
+      captionLine2.style.display = textState.line2Enabled ? "block" : "none";
+      captionLine1.parentElement.classList.toggle("double-line", textState.line2Enabled);
+    }
+    function syncControls() {
+      line1Input.value = textState.line1;
+      line2Enable.checked = textState.line2Enabled;
+      line2Input.value = textState.line2;
+      line2Input.disabled = !textState.line2Enabled;
+      font2Btn.classList.toggle("disabled", !textState.line2Enabled);
+      font1Btn.dataset.value = textState.font1; font1Btn.textContent = getFontLabel(textState.font1);
+      font2Btn.dataset.value = textState.font2; font2Btn.textContent = getFontLabel(textState.font2);
+    }
+    function updateCaptionFromControls() { textState.line1 = line1Input.value.trim(); textState.line2Enabled = line2Enable.checked; textState.line2 = line2Input.value.trim(); textState.font1 = font1Btn.dataset.value; textState.font2 = font2Btn.dataset.value; renderCaption(); }
+    function toggleSecondLine() { line2Input.disabled = !line2Enable.checked; font2Btn.classList.toggle("disabled", !line2Enable.checked); if (!line2Enable.checked) closeFontMenus(); updateCaptionFromControls(); }
+    function randomizeText() { textState.line1 = pickRandomText(); textState.font1 = pickRandomFont().value; if (textState.line2Enabled) { textState.line2 = pickRandomText(); textState.font2 = pickRandomFont().value; } syncControls(); renderCaption(); }
+
+    function recalcCropViewScale() { const rect = cropViewport.getBoundingClientRect(); viewScale = Math.min(Math.max(rect.width - 24, 240) / frameW, Math.max(rect.height - 24, 180) / frameH, 1); cropWrapper.style.width = `${frameW}px`; cropWrapper.style.height = `${frameH}px`; cropWrapper.style.transform = `scale(${viewScale})`; }
+    function renderCropPreview() { cropPreviewImg.style.transform = `translate(${cropTemp.x}px, ${cropTemp.y}px) rotate(${cropTemp.rotate}deg) scale(${cropTemp.scale})`; }
+    function openCropModal() {
+      const img = document.querySelector("#card1 img");
+      if (!img.getAttribute("src")) return uploadPhoto();
+      cropNaturalW = img.naturalWidth; cropNaturalH = img.naturalHeight;
+      cropTemp = { ...photoState, isDragging: false, lastX: 0, lastY: 0 };
+      cropZoom.min = (cropTemp.scale * 0.1).toFixed(4); cropZoom.max = (cropTemp.scale * 10).toFixed(4); cropZoom.value = cropTemp.scale;
+      cropRotate.value = cropTemp.rotate || 0; cropPreviewImg.src = img.src; cropModal.style.display = "flex";
+      requestAnimationFrame(() => { recalcCropViewScale(); updateCropTransform(); });
+    }
+    function closeCropModal() { cropModal.style.display = "none"; }
+    function clampCropPosition() {
+      if (!cropNaturalW) return;
+      const r = cropTemp.rotate * Math.PI / 180, cosR = Math.abs(Math.cos(r)), sinR = Math.abs(Math.sin(r));
+      const minS = Math.max(frameW / (cropNaturalW * cosR + cropNaturalH * sinR), frameH / (cropNaturalW * sinR + cropNaturalH * cosR));
+      if (cropTemp.scale < minS) { cropTemp.scale = minS; if (parseFloat(cropZoom.min) > minS) cropZoom.min = minS.toFixed(4); cropZoom.value = minS; }
+      const s = cropTemp.scale, sw = cropNaturalW * s, sh = cropNaturalH * s, halfW = (sw * cosR + sh * sinR) / 2, halfH = (sw * sinR + sh * cosR) / 2;
+      cropTemp.x = Math.min(halfW - cropNaturalW / 2, Math.max(frameW - halfW - cropNaturalW / 2, cropTemp.x));
+      cropTemp.y = Math.min(halfH - cropNaturalH / 2, Math.max(frameH - halfH - cropNaturalH / 2, cropTemp.y));
+    }
+    function updateCropTransform() {
+      const ns = parseFloat(cropZoom.value), os = cropTemp.scale, nr = parseInt(cropRotate.value, 10) || 0;
+      if (os !== ns) { const cx = frameW / 2, cy = frameH / 2, imgCx = cropTemp.x + cropNaturalW / 2, imgCy = cropTemp.y + cropNaturalH / 2; cropTemp.x += (cx - imgCx) * (1 - ns / os); cropTemp.y += (cy - imgCy) * (1 - ns / os); cropTemp.scale = ns; }
+      cropTemp.rotate = nr; clampCropPosition(); zoomLabel.innerText = (cropTemp.scale / (photoState.scale || 1)).toFixed(1) + "X"; rotateLabel.innerText = cropTemp.rotate + "°"; renderCropPreview();
+    }
+    function applyCrop() { Object.assign(photoState, { x: cropTemp.x, y: cropTemp.y, scale: cropTemp.scale, rotate: cropTemp.rotate }); applyImageState(); closeCropModal(); }
+    function onStart(e) { if (e.target.id !== "cropPreviewImg") return; const t = e.touches ? e.touches[0] : e; cropTemp.isDragging = true; cropTemp.lastX = t.clientX; cropTemp.lastY = t.clientY; }
+    function onMove(e) { if (!cropTemp.isDragging) return; const t = e.touches ? e.touches[0] : e; cropTemp.x += (t.clientX - cropTemp.lastX) / viewScale; cropTemp.y += (t.clientY - cropTemp.lastY) / viewScale; cropTemp.lastX = t.clientX; cropTemp.lastY = t.clientY; renderCropPreview(); e.preventDefault(); }
+    function onEnd() { if (!cropTemp.isDragging) return; cropTemp.isDragging = false; clampCropPosition(); renderCropPreview(); }
+
+    async function exportPhoto() {
+      exportLoading.style.display = "flex";
+      try {
+        const old = scaler.style.transform; scaler.style.transform = "scale(1)";
+        const canvas = await html2canvas(captureArea, { scale: parseFloat(exportQuality.value), useCORS: true, backgroundColor: "#fff", logging: false });
+        scaler.style.transform = old;
+        const link = document.createElement("a"); link.download = `Photo_4x6_polaroid_1_${Date.now()}.jpg`; link.href = canvas.toDataURL("image/jpeg", 0.95); link.click();
+      } catch (e) { alert("导出失败，请重试"); }
+      finally { exportLoading.style.display = "none"; }
+    }
+
+    window.addEventListener("resize", () => { autoScaleCanvas(); if (cropModal.style.display === "flex") { recalcCropViewScale(); renderCropPreview(); } });
+    window.addEventListener("load", () => { renderFontMenus(); updateCardGeometry(marginV); updateCardLayout(); updateCanvasSize(); syncControls(); renderCaption(); autoScaleCanvas(); });
+    document.addEventListener("click", closeFontMenus);
+    document.addEventListener("mousedown", onStart); document.addEventListener("mousemove", onMove); document.addEventListener("mouseup", onEnd);
+    document.addEventListener("touchstart", onStart, { passive: false }); document.addEventListener("touchmove", onMove, { passive: false }); document.addEventListener("touchend", onEnd);
+  </script>
+</body>
+</html>
