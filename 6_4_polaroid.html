@@ -36,10 +36,16 @@
       padding-top: 8px; /* 让文字和图片之间留更多空间 */
       display: flex;
       flex-direction: column;
-      justify-content: flex-end;
+      justify-content: center;
       align-items: center;
       gap: 6px;
       pointer-events: none;
+    }
+    .caption.single-line {
+      justify-content: center;
+    }
+    .caption.double-line {
+      transform: translateY(-6px);
     }
     .caption-line { max-width: 100%; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.05; }
     .caption-line.line1 { font-size: 28px; }
@@ -157,11 +163,11 @@
     <div class="p-8 bg-zinc-950">
       <div class="max-w-xs mx-auto space-y-8">
         <div>
-          <div class="flex justify-between text-[10px] text-zinc-500 font-black mb-3"><span>水平边距 (px)</span><span id="marginHLabel" class="text-blue-500">60</span></div>
+          <div class="flex justify-between text-[10px] text-zinc-500 font-black mb-3"><span>水平边距 (px)</span><span id="marginHLabel" class="text-blue-500">20</span></div>
           <input type="range" id="marginH" min="0" max="160" step="1" oninput="updateMarginPreview()" class="w-full">
         </div>
         <div>
-          <div class="flex justify-between text-[10px] text-zinc-500 font-black mb-3"><span>垂直边距 (px)</span><span id="marginVLabel" class="text-blue-500">40</span></div>
+          <div class="flex justify-between text-[10px] text-zinc-500 font-black mb-3"><span>垂直边距 (px)</span><span id="marginVLabel" class="text-blue-500">10</span></div>
           <input type="range" id="marginV" min="0" max="120" step="1" oninput="updateMarginPreview()" class="w-full">
         </div>
       </div>
@@ -218,8 +224,8 @@
     let cropNaturalH = 0;
     let viewScale = 1;
     let cropTemp = { x: 0, y: 0, scale: 1, rotate: 0, lastX: 0, lastY: 0, isDragging: false };
-    let marginH = 60;
-    let marginV = 40;
+    let marginH = 20;
+    let marginV = 10;
     let previewMarginH = marginH;
     let previewMarginV = marginV;
 
@@ -310,6 +316,7 @@
 
     function renderCaption(id) {
       const s = textStates.get(id);
+      const box = document.getElementById(`caption${id}line1`).parentElement;
       const line1 = document.getElementById(`caption${id}line1`);
       const line2 = document.getElementById(`caption${id}line2`);
       line1.innerText = s.line1 || " ";
@@ -317,6 +324,8 @@
       line2.innerText = s.line2 || " ";
       line2.style.fontFamily = s.font2;
       line2.style.display = s.line2Enabled ? "block" : "none";
+      box.classList.toggle("single-line", !s.line2Enabled);
+      box.classList.toggle("double-line", s.line2Enabled);
     }
 
     function updateActiveCaptionFromControls() {
