@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>寻马日记 - 刘宸玮</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 引入手写卡通感字体 */
+        @import url('https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=ZCOOL+XiaoWei&display=swap');
+
+        :root {
+            // --journal-bg: #fffdf5;
+            --journal-bg: none;
+            --accent-color: #d4a373;
+            --text-hand: 'ZCOOL KuaiLe', cursive;
+            --text-standard: 'STKaiti', 'KaiTi', serif;
+        }
+
+        body {
+            // background-color: #e5e5e5;
+            background-color: none;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .a4-page {
+            width: 210mm;
+            height: 297mm;
+            background-color: var(--journal-bg);
+            box-shadow: 0 0 30px rgba(0,0,0,0.15);
+            position: relative;
+            padding: 50px;
+            box-sizing: border-box;
+            overflow: hidden;
+            border: 12px solid #fff;
+        }
+
+        /* 手绘网格底纹 */
+        .grid-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: radial-gradient(#d4a373 0.5px, transparent 0.5px);
+            background-size: 25px 25px;
+            opacity: 0.2;
+            pointer-events: none;
+        }
+
+        /* 标题部分 - 调整了位置，避免遮挡 */
+        .title-container {
+            text-align: left;
+            margin-top: 10px;
+            margin-left: 20px;
+            max-width: 60%; /* 限制宽度，不进入右侧信息栏区域 */
+        }
+
+        .main-title {
+            font-family: var(--text-hand);
+            font-size: 84px; /* 稍微缩小一点 */
+            color: #8b5e3c;
+            text-shadow: 3px 3px 0px #faedcd;
+            display: inline-block;
+            transform: rotate(-1deg);
+            white-space: nowrap;
+        }
+
+        .subtitle {
+            font-family: var(--text-hand);
+            font-size: 26px;
+            color: #bc8a5f;
+            margin-top: 5px;
+        }
+
+        /* 个人信息栏 - 保持清晰 */
+        .info-card {
+            position: absolute;
+            top: 50px;
+            right: 50px;
+            background: white;
+            padding: 15px 25px;
+            border-radius: 12px;
+            border: 3px solid #faedcd;
+            box-shadow: 6px 6px 0px #faedcd;
+            z-index: 20;
+        }
+
+        .info-item {
+            font-family: var(--text-standard);
+            font-size: 22px;
+            font-weight: bold;
+            color: #444;
+            line-height: 1.6;
+        }
+
+        /* 照片框 */
+        .photo-frame {
+            border: 4px dashed #d4a373;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            box-shadow: 5px 5px 15px rgba(0,0,0,0.05);
+            z-index: 5;
+        }
+
+        .photo-frame::before {
+            content: '📷';
+            font-size: 40px;
+            margin-bottom: 10px;
+            opacity: 0.5;
+        }
+
+        .photo-text {
+            font-family: var(--text-hand);
+            font-size: 18px;
+            color: #a98467;
+            padding: 0 10px;
+            text-align: center;
+        }
+
+        .frame-1 { width: 380px; height: 280px; transform: rotate(-2deg); margin: 40px 0 0 20px; }
+        .frame-2 { width: 300px; height: 400px; transform: rotate(2deg); position: absolute; bottom: 180px; right: 50px; }
+
+        /* 彩色胶带 */
+        .tape {
+            position: absolute;
+            width: 90px;
+            height: 30px;
+            background: rgba(250, 237, 205, 0.8);
+            top: -12px;
+            left: 50%;
+            margin-left: -45px;
+            transform: rotate(-3deg);
+            border-left: 2px dotted #fff;
+            border-right: 2px dotted #fff;
+        }
+
+        /* 底部横幅 - 下移以避免遮挡天气 */
+        .footer-banner {
+            position: absolute;
+            bottom: 30px; /* 下移 */
+            width: 100%;
+            left: 0;
+            text-align: center;
+            font-family: var(--text-hand);
+            font-size: 28px;
+            color: #8b5e3c;
+            background: #faedcd;
+            padding: 8px 0;
+            clip-path: polygon(5% 0%, 95% 0%, 100% 50%, 95% 100%, 5% 100%, 0% 50%);
+            z-index: 10;
+        }
+
+        /* 手写天气和日期 - 向上微调 */
+        .status-note {
+            font-family: var(--text-hand);
+            font-size: 22px;
+            color: #b5838d;
+            position: absolute;
+            bottom: 100px; /* 距离底部距离增大 */
+            left: 60px;
+            transform: rotate(-2deg);
+            z-index: 5;
+        }
+
+        .horse-emoji {
+            font-size: 80px;
+            position: absolute;
+            opacity: 0.2;
+            z-index: 1;
+        }
+
+        .scribble-box {
+            position: absolute;
+            left: 60px;
+            top: 550px;
+            max-width: 300px;
+            z-index: 5;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="a4-page">
+        <div class="grid-overlay"></div>
+
+        <!-- 背景装饰 -->
+        <div class="horse-emoji" style="top: 20%; left: 5%;">🐎</div>
+        <div class="horse-emoji" style="bottom: 25%; right: 5%; transform: scaleX(-1);">🎠</div>
+
+        <!-- 标题区域：向左对齐，避开右侧姓名框 -->
+        <div class="title-container">
+            <h1 class="main-title">寻马日记</h1>
+            <p class="subtitle">马年大吉 · 快乐成长记录</p>
+        </div>
+
+        <!-- 个人信息栏：位置固定在右上 -->
+        <div class="info-card">
+            <div class="info-item">姓名：刘宸玮</div>
+            <div class="info-item" style="border-top: 1px dashed #eee; margin-top: 5px; padding-top: 5px;">班级：小二班</div>
+        </div>
+
+        <!-- 照片框 1 -->
+        <div class="photo-frame frame-1">
+            <div class="tape"></div>
+            <span class="photo-text">我和马儿的初次见面</span>
+        </div>
+
+        <!-- 随笔区 -->
+        <div class="scribble-box">
+            <div style="font-family: var(--text-hand); font-size: 24px; color: #6d6875;">
+                <span style="font-size: 30px;">“</span>
+                马儿快快跑，<br>&nbsp;&nbsp;&nbsp;带我去寻找春天！
+                <span style="font-size: 30px; vertical-align: bottom;">”</span>
+            </div>
+            <div class="mt-4 flex gap-4 text-3xl">
+                <span>🍎</span><span>🥕</span><span>⭐</span>
+            </div>
+        </div>
+
+        <!-- 照片框 2 -->
+        <div class="photo-frame frame-2">
+            <div class="tape" style="background: rgba(212, 163, 115, 0.4); top: auto; bottom: -15px;"></div>
+            <span class="photo-text">我眼中的马儿</span>
+        </div>
+
+        <!-- 日期天气栏：向上移动，避开底部横幅 -->
+        <div class="status-note">
+            📅 日期：2026年__月__日<br>
+            ☀️ 天气：_________
+        </div>
+
+        <!-- 底部横幅：最底层显示 -->
+        <div class="footer-banner">
+            祝 宸 玮 小 朋 友：一 马 当 先，快 乐 满 分！
+        </div>
+
+    </div>
+
+</body>
+</html>
