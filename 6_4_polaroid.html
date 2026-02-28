@@ -237,7 +237,14 @@
   <script>
     const FRAME_W = 332;
     let frameH = 386;
-    const TEXT_POOL = ["今日份快乐", "周末散步", "天晴有风", "你在身边", "生活是礼物", "路过好风景", "记录这一刻", "小确幸"];
+    const TEXT_POOL = [
+      "今日份快乐", "周末散步", "天晴有风", "你在身边", "生活是礼物", "路过好风景", "记录这一刻", "小确幸",
+      "心情放映中", "刚刚好的一天", "把日子拍成诗", "此刻很喜欢", "平凡但闪亮", "慢慢来比较快", "今天也很可爱", "正在发光",
+      "Good Day", "Hello Weekend", "Love This Moment", "Stay Golden", "Sweet Memory", "Happy Vibes",
+      "今日份快乐 😊", "晴天收集计划 ☀️", "碎片日常 📸", "刚好遇见你 💙", "一起去看海 🌊", "散步小分队 🚶",
+      "奶呼呼的一天 🧋", "快乐加载中 ✨", "普通但珍贵 🤍", "咔嚓一下 📷", "有你真好 🫶", "出发去浪漫 🎈",
+      "周末治愈局 🍃", "今晚看月亮 🌙", "好天气营业中 🌤️", "打卡成功 ✅", "可爱超标 🐾", "这张超喜欢 😍"
+    ];
     const photoStates = new Map();
     const textStates = new Map([
       [1, { line1: "今日份快乐", line2Enabled: false, line2: "", font1: "'Ma Shan Zheng', cursive", font2: "'ZCOOL KuaiLe', cursive" }],
