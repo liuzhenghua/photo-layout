@@ -17,8 +17,25 @@
       --caption-space: 90px;
       --caption-min-h: 64px;
     }
-    body { touch-action: manipulation; -webkit-tap-highlight-color: transparent; overscroll-behavior-y: contain; }
-    .canvas-viewport { width: 100%; display: flex; justify-content: center; align-items: flex-start; padding: 10px; background: #f8fafc; min-height: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior-y: contain;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+    .canvas-viewport {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 8px;
+      background: #f8fafc;
+      min-height: 0;
+      overflow: hidden;
+    }
     .canvas-scaler { transform-origin: center center; transition: transform 0.2s ease; }
     .photo-canvas { width: var(--canvas-w); height: var(--canvas-h); position: relative; overflow: hidden; background: #fff; }
     .polaroid { position: absolute; width: 360px; height: var(--card-h); background: #fff; padding: 14px 14px var(--caption-space) 14px; cursor: pointer; user-select: none; }
@@ -80,7 +97,7 @@
     </div>
   </header>
 
-  <main class="flex-1 canvas-viewport pb-[220px] md:pb-[190px]">
+  <main class="flex-1 canvas-viewport">
     <div id="scaler" class="canvas-scaler">
       <div id="captureArea" class="photo-canvas">
         <div id="card1" class="polaroid" style="left: 68px; top: 55px;" onclick="selectCard(1)">
@@ -107,7 +124,7 @@
     </div>
   </main>
 
-  <section id="controlPanel" class="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-slate-200 p-3 shadow-[0_-10px_30px_rgba(0,0,0,0.08)] max-h-[46vh] overflow-auto pb-[max(12px,env(safe-area-inset-bottom))]">
+  <section id="controlPanel" class="bg-white border-t border-slate-200 p-3 shadow-[0_-6px_16px_rgba(0,0,0,0.06)] max-h-[44dvh] overflow-auto pb-[max(12px,env(safe-area-inset-bottom))]">
     <div class="max-w-4xl mx-auto space-y-2">
       <div class="flex items-center justify-between gap-2">
         <div class="text-xs font-bold text-slate-600">当前选中：<span id="activeLabel" class="text-blue-600">第1张</span></div>
@@ -294,11 +311,8 @@
       const viewport = document.querySelector(".canvas-viewport");
       const scaler = document.getElementById("scaler");
       const area = document.getElementById("captureArea");
-      const headerH = document.querySelector("header").offsetHeight;
-      const panelH = document.getElementById("controlPanel").offsetHeight;
-      const availableH = Math.max(window.innerHeight - headerH - panelH - 20, 180);
-      const widthScale = (viewport.clientWidth - 20) / area.offsetWidth;
-      const heightScale = availableH / area.offsetHeight;
+      const widthScale = (viewport.clientWidth - 12) / area.offsetWidth;
+      const heightScale = (viewport.clientHeight - 12) / area.offsetHeight;
       const scale = Math.min(widthScale, heightScale, 1);
       scaler.style.transform = `scale(${scale})`;
     }
