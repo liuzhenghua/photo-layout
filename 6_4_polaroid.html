@@ -314,7 +314,7 @@
       const viewport = document.querySelector(".canvas-viewport");
       const scaler = document.getElementById("scaler");
       const area = document.getElementById("captureArea");
-      const widthScale = (viewport.clientWidth - 4) / area.offsetWidth;
+      const widthScale = (viewport.clientWidth - 20) / area.offsetWidth;
       const heightScale = (viewport.clientHeight - 4) / area.offsetHeight;
       const scale = Math.min(widthScale, heightScale, 1);
       scaler.style.transform = `scale(${scale})`;
