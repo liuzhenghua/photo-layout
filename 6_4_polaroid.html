@@ -95,6 +95,62 @@
         font-size: 16px;
       }
     }
+    .font-picker-btn {
+      width: 100%;
+      min-height: 44px;
+      font-size: 14px;
+      line-height: 1.2;
+      border: 1px solid #cbd5e1;
+      border-radius: 0.5rem;
+      background: #fff;
+      padding: 10px 36px 10px 10px;
+      text-align: left;
+      position: relative;
+      cursor: pointer;
+    }
+    .font-picker-btn::after {
+      content: "▾";
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #64748b;
+      font-size: 12px;
+      pointer-events: none;
+    }
+    .font-picker-btn.disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .font-menu {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: calc(100% + 4px);
+      max-height: 220px;
+      overflow: auto;
+      background: #fff;
+      border: 1px solid #cbd5e1;
+      border-radius: 0.5rem;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+      z-index: 9999;
+    }
+    .font-menu.up {
+      top: auto;
+      bottom: calc(100% + 4px);
+    }
+    .font-menu button {
+      width: 100%;
+      border: none;
+      background: #fff;
+      text-align: left;
+      padding: 10px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .font-menu button:hover {
+      background: #f1f5f9;
+    }
   </style>
 </head>
 <body class="bg-slate-50 min-h-screen flex flex-col">
@@ -160,16 +216,10 @@
         </div>
         <div class="flex items-center gap-2">
           <label class="text-xs text-slate-500 font-bold w-14">字体1</label>
-          <select id="font1Select" onchange="updateActiveCaptionFromControls()" oninput="updateActiveCaptionFromControls()" class="mobile-select flex-1 border border-slate-300 rounded-lg px-2 bg-white">
-            <option value="'Ma Shan Zheng', cursive">马善政</option>
-            <option value="'ZCOOL KuaiLe', cursive">站酷快乐体</option>
-            <option value="'ZCOOL XiaoWei', serif">站酷小薇体</option>
-            <option value="'ZCOOL QingKe HuangYou', cursive">站酷庆科黄油体</option>
-            <option value="'Long Cang', cursive">龙藏体</option>
-            <option value="'Caveat', cursive">Caveat</option>
-            <option value="'Pacifico', cursive">Pacifico</option>
-            <option value="'Comic Sans MS', 'Marker Felt', cursive">Handwritten</option>
-          </select>
+          <div class="flex-1 relative">
+            <button id="font1Btn" type="button" class="font-picker-btn" onclick="toggleFontMenu(1, event)" data-value="'Ma Shan Zheng', cursive">马善政</button>
+            <div id="font1Menu" class="font-menu hidden"></div>
+          </div>
         </div>
         <div class="flex items-center gap-2">
           <label class="inline-flex items-center gap-2 text-xs text-slate-600 font-bold">
@@ -180,16 +230,10 @@
         </div>
         <div class="flex items-center gap-2">
           <label class="text-xs text-slate-500 font-bold w-14">字体2</label>
-          <select id="font2Select" onchange="updateActiveCaptionFromControls()" oninput="updateActiveCaptionFromControls()" class="mobile-select flex-1 border border-slate-300 rounded-lg px-2 bg-white" disabled>
-            <option value="'Ma Shan Zheng', cursive">马善政</option>
-            <option value="'ZCOOL KuaiLe', cursive">站酷快乐体</option>
-            <option value="'ZCOOL XiaoWei', serif">站酷小薇体</option>
-            <option value="'ZCOOL QingKe HuangYou', cursive">站酷庆科黄油体</option>
-            <option value="'Long Cang', cursive">龙藏体</option>
-            <option value="'Caveat', cursive">Caveat</option>
-            <option value="'Pacifico', cursive">Pacifico</option>
-            <option value="'Comic Sans MS', 'Marker Felt', cursive">Handwritten</option>
-          </select>
+          <div class="flex-1 relative">
+            <button id="font2Btn" type="button" class="font-picker-btn disabled" onclick="toggleFontMenu(2, event)" data-value="'ZCOOL KuaiLe', cursive">站酷快乐体</button>
+            <div id="font2Menu" class="font-menu hidden"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -352,9 +396,57 @@
     function pickRandomText() {
       return TEXT_POOL[Math.floor(Math.random() * TEXT_POOL.length)];
     }
+    const FONT_OPTIONS = [
+      { label: "马善政", value: "'Ma Shan Zheng', cursive" },
+      { label: "站酷快乐体", value: "'ZCOOL KuaiLe', cursive" },
+      { label: "站酷小薇体", value: "'ZCOOL XiaoWei', serif" },
+      { label: "站酷庆科黄油体", value: "'ZCOOL QingKe HuangYou', cursive" },
+      { label: "龙藏体", value: "'Long Cang', cursive" },
+      { label: "Caveat", value: "'Caveat', cursive" },
+      { label: "Pacifico", value: "'Pacifico', cursive" },
+      { label: "Handwritten", value: "'Comic Sans MS', 'Marker Felt', cursive" }
+    ];
     function pickRandomFont() {
-      const options = Array.from(document.getElementById("font1Select").options).map(o => o.value);
-      return options[Math.floor(Math.random() * options.length)];
+      return FONT_OPTIONS[Math.floor(Math.random() * FONT_OPTIONS.length)];
+    }
+    function getFontLabelByValue(value) {
+      const found = FONT_OPTIONS.find(f => f.value === value);
+      return found ? found.label : "选择字体";
+    }
+    function renderFontMenus() {
+      const m1 = document.getElementById("font1Menu");
+      const m2 = document.getElementById("font2Menu");
+      const html = FONT_OPTIONS.map(f => `<button type="button" onclick="setActiveFont(${1}, '${f.value.replace(/'/g, "\\'")}', '${f.label}')">${f.label}</button>`).join("");
+      const html2 = FONT_OPTIONS.map(f => `<button type="button" onclick="setActiveFont(${2}, '${f.value.replace(/'/g, "\\'")}', '${f.label}')">${f.label}</button>`).join("");
+      m1.innerHTML = html;
+      m2.innerHTML = html2;
+    }
+    function closeFontMenus() {
+      document.getElementById("font1Menu").classList.add("hidden");
+      document.getElementById("font2Menu").classList.add("hidden");
+    }
+    function toggleFontMenu(line, event) {
+      event.stopPropagation();
+      const btn = document.getElementById(`font${line}Btn`);
+      if (btn.classList.contains("disabled")) return;
+      const menu = document.getElementById(`font${line}Menu`);
+      const willOpen = menu.classList.contains("hidden");
+      closeFontMenus();
+      if (willOpen) {
+        const rect = btn.getBoundingClientRect();
+        const viewportH = window.innerHeight || document.documentElement.clientHeight;
+        const estimatedMenuH = 220;
+        const spaceBelow = viewportH - rect.bottom;
+        menu.classList.toggle("up", spaceBelow < estimatedMenuH + 12);
+        menu.classList.remove("hidden");
+      }
+    }
+    function setActiveFont(line, value, label) {
+      const btn = document.getElementById(`font${line}Btn`);
+      btn.dataset.value = value;
+      btn.textContent = label;
+      closeFontMenus();
+      updateActiveCaptionFromControls();
     }
 
     function syncControlsFromActive() {
@@ -363,10 +455,14 @@
       document.getElementById("line1Input").value = s.line1;
       document.getElementById("line2Enable").checked = s.line2Enabled;
       document.getElementById("line2Input").value = s.line2;
-      document.getElementById("font1Select").value = s.font1;
-      document.getElementById("font2Select").value = s.font2;
+      const font1Btn = document.getElementById("font1Btn");
+      const font2Btn = document.getElementById("font2Btn");
+      font1Btn.dataset.value = s.font1;
+      font2Btn.dataset.value = s.font2;
+      font1Btn.textContent = getFontLabelByValue(s.font1);
+      font2Btn.textContent = getFontLabelByValue(s.font2);
       document.getElementById("line2Input").disabled = !s.line2Enabled;
-      document.getElementById("font2Select").disabled = !s.line2Enabled;
+      font2Btn.classList.toggle("disabled", !s.line2Enabled);
     }
 
     function renderCaption(id) {
@@ -388,24 +484,29 @@
       s.line1 = document.getElementById("line1Input").value.trim();
       s.line2Enabled = document.getElementById("line2Enable").checked;
       s.line2 = document.getElementById("line2Input").value.trim();
-      s.font1 = document.getElementById("font1Select").value;
-      s.font2 = document.getElementById("font2Select").value;
+      s.font1 = document.getElementById("font1Btn").dataset.value;
+      s.font2 = document.getElementById("font2Btn").dataset.value;
       renderCaption(activeCard);
     }
 
     function toggleSecondLine() {
       const enabled = document.getElementById("line2Enable").checked;
       document.getElementById("line2Input").disabled = !enabled;
-      document.getElementById("font2Select").disabled = !enabled;
+      document.getElementById("font2Btn").classList.toggle("disabled", !enabled);
+      if (!enabled) closeFontMenus();
       updateActiveCaptionFromControls();
     }
 
     function randomizeActiveText() {
       const s = textStates.get(activeCard);
       s.line1 = pickRandomText();
-      s.font1 = pickRandomFont();
+      const f1 = pickRandomFont();
+      s.font1 = f1.value;
       if (s.line2Enabled) s.line2 = pickRandomText();
-      if (s.line2Enabled) s.font2 = pickRandomFont();
+      if (s.line2Enabled) {
+        const f2 = pickRandomFont();
+        s.font2 = f2.value;
+      }
       syncControlsFromActive();
       renderCaption(activeCard);
     }
@@ -594,6 +695,7 @@
       }
     });
     window.addEventListener("load", () => {
+      renderFontMenus();
       updateCardGeometry(marginV);
       updateCardLayout();
       updateCanvasSize();
@@ -602,6 +704,7 @@
       selectCard(1);
       autoScaleCanvas();
     });
+    document.addEventListener("click", closeFontMenus);
     document.addEventListener("mousedown", onStart);
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onEnd);
