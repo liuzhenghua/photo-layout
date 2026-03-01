@@ -20,14 +20,13 @@
     
     /* 修复白屏及顶部栏消失Bug：解除绝对锁定，允许被键盘顶起及回弹 */
     html, body { 
-      min-height: 100%; 
       overflow-x: hidden; 
     }
     body {
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
       overscroll-behavior-y: none;
-      min-height: 100svh;
+      height: var(--real-vh);
       display: flex;
       flex-direction: column;
     }
@@ -676,6 +675,15 @@
     document.addEventListener("touchend", onEnd);
     document.getElementById("card1").addEventListener("dblclick", () => uploadPhoto(1));
     document.getElementById("card2").addEventListener("dblclick", () => uploadPhoto(2));
+
+    function setRealViewportHeight() {
+      const vh = window.innerHeight;
+      document.documentElement.style.setProperty('--real-vh', `${vh}px`);
+    }
+
+    window.addEventListener('resize', setRealViewportHeight);
+    window.addEventListener('orientationchange', setRealViewportHeight);
+    setRealViewportHeight();
   </script>
 </body>
 </html>
