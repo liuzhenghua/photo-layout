@@ -17,15 +17,21 @@
       --caption-space: 90px;
       --caption-min-h: 64px;
     }
-    html, body { height: 100%; overflow: hidden; }
+    
+    /* 修复白屏及顶部栏消失Bug：解除绝对锁定，允许被键盘顶起及回弹 */
+    html, body { 
+      min-height: 100%; 
+      overflow-x: hidden; 
+    }
     body {
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
-      overscroll-behavior-y: contain;
-      height: 100dvh;
+      overscroll-behavior-y: none;
+      min-height: 100dvh;
       display: flex;
       flex-direction: column;
     }
+    
     .canvas-viewport {
       width: 100%;
       display: flex;
@@ -47,18 +53,17 @@
     .photo-area img { position: absolute; top: 0; left: 0; transform-origin: center center; max-width: none !important; max-height: none !important; display: none; pointer-events: none; }
     .placeholder { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #94a3b8; border: 1px dashed #cbd5e1; font-size: 12px; font-weight: 700; }
 
-    /* 找到并修改这些样式 */
     .caption {
       position: absolute;
       left: 20px;
       right: 20px;
-      bottom: 20px; /* 稍微向上调一点 */
+      bottom: 20px;
       min-height: var(--caption-min-h);
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
-      gap: 4px; /* 使用 gap，但在导出函数里做了兼容处理 */
+      gap: 4px;
       pointer-events: none;
     }
 
@@ -66,22 +71,16 @@
       max-width: 100%; 
       color: #334155; 
       white-space: nowrap; 
-      /* 必须改为 visible，否则手写体的笔画会被切掉 */
       overflow: visible !important; 
-      /* 增大行高给艺术字体留空间 */
       line-height: 1.35 !important; 
       text-align: center;
     }
 
-    /* 修正卡片内部的图片区域，确保不遮挡文字 */
     .polaroid {
-      /* 确保内边距足够 */
       padding: 14px 14px var(--caption-space) 14px;
-      /* 移除 box-sizing 干扰 */
       box-sizing: border-box;
     }
 
-    /* 确保导出时不显示虚线框 */
     .placeholder {
       border: none !important;
     }
@@ -274,34 +273,25 @@
     let previewMarginH = marginH;
     let previewMarginV = marginV;
 
-    // 统一的布局计算函数，强制锁定 3:2 (横版 6寸) 比例
     function updateLayout(h = marginH, v = marginV) {
       const root = document.documentElement;
       
-      // 1. 核心修复：强制总画布宽高的绝对 3:2 比例 (宽1.5 : 高1)
-      // 两张卡片宽度固定为 360*2=720，加上左、中、右 3 个水平边距
       const canvasW = 360 * 2 + h * 3;
-      // 强制按照 1.5 的比例反推画布高度 (数学上: (720+3h)/1.5 = 480+2h，绝对是整数)
       const canvasH = canvasW / 1.5; 
       
-      // 2. 根据画布总高和垂直边距，反推卡片内部的高度
       const cardH = canvasH - v * 2;
       
-      // 3. 动态计算文字区的高度 (约占卡片高度的 18%)
       const captionSpace = Math.max(82, Math.floor(cardH * 0.18));
       const captionMinH = Math.max(58, captionSpace - 24);
       
-      // 4. 更新全局相框尺寸（给裁剪功能使用）
       frameH = cardH - 14 - captionSpace;
       
-      // 5. 应用到 CSS 变量
       root.style.setProperty("--canvas-w", `${canvasW}px`);
       root.style.setProperty("--canvas-h", `${canvasH}px`);
       root.style.setProperty("--card-h", `${cardH}px`);
       root.style.setProperty("--caption-space", `${captionSpace}px`);
       root.style.setProperty("--caption-min-h", `${captionMinH}px`);
       
-      // 6. 居中定位两张拍立得卡片
       const card1 = document.getElementById("card1");
       const card2 = document.getElementById("card2");
       card1.style.left = `${h}px`;
@@ -331,7 +321,6 @@
       previewMarginV = parseInt(document.getElementById("marginV").value, 10) || 0;
       document.getElementById("marginHLabel").innerText = previewMarginH;
       document.getElementById("marginVLabel").innerText = previewMarginV;
-      // 预览时实时更新布局，严格保持 3:2
       updateLayout(previewMarginH, previewMarginV);
     }
 
@@ -595,41 +584,34 @@
       const area = document.getElementById("captureArea");
       const qualityScale = parseFloat(document.getElementById("exportQuality").value);
       
-      // 1. 获取当前设计稿的原始宽高（不含缩放）
       const originalWidth = area.offsetWidth;
       const originalHeight = area.offsetHeight;
 
       loading.style.display = "flex";
 
       try {
-        // 2. 确保字体加载完成
         await document.fonts.ready;
 
-        // 3. 开始截图
         const canvas = await html2canvas(area, {
           scale: qualityScale,
           useCORS: true,
           backgroundColor: "#ffffff",
           logging: false,
-          // 关键：强制 html2canvas 认为是在原始尺寸窗口下渲染
           width: originalWidth,
           height: originalHeight,
           windowWidth: originalWidth,
           windowHeight: originalHeight,
-          // 解决页面滚动导致的偏移
           x: 0,
           y: 0,
           scrollX: 0,
           scrollY: 0,
           onclone: (clonedDoc) => {
-            // 4. 在克隆出的文档中，移除掉选中的蓝色边框
             const activeCard = clonedDoc.querySelector('.polaroid.active');
             if (activeCard) {
               activeCard.style.boxShadow = "none";
               activeCard.style.border = "none";
             }
 
-            // 5. 强制克隆的容器取消任何 CSS 缩放，恢复 1:1
             const clonedScaler = clonedDoc.getElementById("scaler");
             if (clonedScaler) {
               clonedScaler.style.transform = "none";
@@ -637,17 +619,18 @@
               clonedScaler.style.padding = "0";
             }
             
-            // 6. 解决移动端文字可能显示不全或偏移的问题
+            // 【修复点】：只有原本未被隐藏的行，才去设置其 display 属性
             const captions = clonedDoc.querySelectorAll('.caption-line');
             captions.forEach(el => {
                 el.style.overflow = "visible";
-                el.style.display = "block";
+                if (el.style.display !== "none") {
+                    el.style.display = "block"; 
+                }
                 el.style.lineHeight = "1.3";
             });
           }
         });
 
-        // 7. 导出下载
         const link = document.createElement("a");
         link.download = `Polaroid_Export_${Date.now()}.jpg`;
         link.href = canvas.toDataURL("image/jpeg", 0.95);
@@ -669,13 +652,22 @@
     });
     window.addEventListener("load", () => {
       renderFontSelects();
-      // 用新的 updateLayout() 替换掉旧的三个初始化函数
       updateLayout();
       renderCaption(1);
       renderCaption(2);
       selectCard(1);
       autoScaleCanvas();
     });
+
+    // 【修复点】：监听所有输入框失焦事件，解决移动端输入法收起后整个页面不往下落、出现大面积白屏、找不到顶部栏的Bug
+    document.addEventListener('focusout', (e) => {
+      if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) {
+        setTimeout(() => {
+          window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+        }, 10);
+      }
+    });
+
     document.addEventListener("mousedown", onStart);
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onEnd);
