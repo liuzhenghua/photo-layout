@@ -18,7 +18,7 @@
       --caption-space: 120px;
       --caption-min-h: 82px;
     }
-    html, body { height: 100%; overflow: hidden; }
+    html, body { height: 100%; overflow: hidden; overflow-x: hidden; }
     body {
       margin: 0;
       height: 100dvh;
@@ -36,7 +36,8 @@
       align-items: flex-start;
       padding: 8px;
       min-height: 0;
-      overflow: auto;
+      overflow-y: auto;
+      overflow-x: hidden;
       -webkit-overflow-scrolling: touch;
       background: #f8fafc;
     }
