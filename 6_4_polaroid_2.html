@@ -385,33 +385,41 @@
     let previewMarginH = marginH;
     let previewMarginV = marginV;
 
-    function updateCardGeometry(v = marginV) {
+    // 统一的布局计算函数，强制锁定 3:2 (横版 6寸) 比例
+    function updateLayout(h = marginH, v = marginV) {
       const root = document.documentElement;
-      const cardH = Math.max(440, Math.min(560, 570 - v));
-      const captionSpace = Math.max(82, Math.min(130, 130 - Math.floor(v * 0.5)));
+      
+      // 1. 核心修复：强制总画布宽高的绝对 3:2 比例 (宽1.5 : 高1)
+      // 两张卡片宽度固定为 360*2=720，加上左、中、右 3 个水平边距
+      const canvasW = 360 * 2 + h * 3;
+      // 强制按照 1.5 的比例反推画布高度 (数学上: (720+3h)/1.5 = 480+2h，绝对是整数)
+      const canvasH = canvasW / 1.5; 
+      
+      // 2. 根据画布总高和垂直边距，反推卡片内部的高度
+      const cardH = canvasH - v * 2;
+      
+      // 3. 动态计算文字区的高度 (约占卡片高度的 18%)
+      const captionSpace = Math.max(82, Math.floor(cardH * 0.18));
       const captionMinH = Math.max(58, captionSpace - 24);
+      
+      // 4. 更新全局相框尺寸（给裁剪功能使用）
       frameH = cardH - 14 - captionSpace;
+      
+      // 5. 应用到 CSS 变量
+      root.style.setProperty("--canvas-w", `${canvasW}px`);
+      root.style.setProperty("--canvas-h", `${canvasH}px`);
       root.style.setProperty("--card-h", `${cardH}px`);
       root.style.setProperty("--caption-space", `${captionSpace}px`);
       root.style.setProperty("--caption-min-h", `${captionMinH}px`);
-    }
-
-    function updateCardLayout(h = marginH, v = marginV) {
+      
+      // 6. 居中定位两张拍立得卡片
       const card1 = document.getElementById("card1");
       const card2 = document.getElementById("card2");
       card1.style.left = `${h}px`;
       card1.style.top = `${v}px`;
       card2.style.left = `${h + 360 + h}px`;
       card2.style.top = `${v}px`;
-    }
-
-    function updateCanvasSize(h = marginH, v = marginV) {
-      const root = document.documentElement;
-      const w = 360 + 360 + h * 3; // 左边距 + 两卡中缝 + 右边距
-      const cardH = parseInt(getComputedStyle(root).getPropertyValue("--card-h"), 10) || 490;
-      const hgt = cardH + v * 2;      // 上边距 + 卡片 + 下边距
-      root.style.setProperty("--canvas-w", `${w}px`);
-      root.style.setProperty("--canvas-h", `${hgt}px`);
+      
       autoScaleCanvas();
     }
 
@@ -425,24 +433,23 @@
       document.getElementById("marginModal").style.display = "flex";
     }
     function closeMarginModal() {
-      updateCardLayout(marginH, marginV);
+      updateLayout(marginH, marginV);
       document.getElementById("marginModal").style.display = "none";
     }
+
     function updateMarginPreview() {
       previewMarginH = parseInt(document.getElementById("marginH").value, 10) || 0;
       previewMarginV = parseInt(document.getElementById("marginV").value, 10) || 0;
       document.getElementById("marginHLabel").innerText = previewMarginH;
       document.getElementById("marginVLabel").innerText = previewMarginV;
-      updateCardGeometry(previewMarginV);
-      updateCardLayout(previewMarginH, previewMarginV);
-      updateCanvasSize(previewMarginH, previewMarginV);
+      // 预览时实时更新布局，严格保持 3:2
+      updateLayout(previewMarginH, previewMarginV);
     }
+
     function applyMargin() {
       marginH = previewMarginH;
       marginV = previewMarginV;
-      updateCardGeometry(marginV);
-      updateCardLayout();
-      updateCanvasSize();
+      updateLayout(marginH, marginV);
       closeMarginModal();
     }
 
@@ -808,9 +815,8 @@
     });
     window.addEventListener("load", () => {
       renderFontMenus();
-      updateCardGeometry(marginV);
-      updateCardLayout();
-      updateCanvasSize();
+      // 用新的 updateLayout() 替换掉旧的三个初始化函数
+      updateLayout();
       renderCaption(1);
       renderCaption(2);
       selectCard(1);
