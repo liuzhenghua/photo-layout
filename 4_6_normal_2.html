@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>4x6满幅四联排版工具</title>
+    <title>4x6 竖版双拼排版工具</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         :root {
             --canvas-w: 600px;
             --canvas-h: 900px;
-            --slot-w: 300px;
+            --slot-w: 600px;
             --slot-h: 450px;
         }
 
-        body { 
-            touch-action: manipulation; 
+        body {
+            touch-action: manipulation;
             -webkit-tap-highlight-color: transparent;
             overscroll-behavior-y: contain;
         }
@@ -39,16 +39,10 @@
             width: var(--canvas-w);
             height: var(--canvas-h);
             background: #fff;
-            box-shadow: 0 4px 25px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 25px rgba(0, 0, 0, 0.1);
             position: relative;
             overflow: hidden;
-            /* outer border removed per user request */
             border: none;
-        }
-        
-        .cut-line-h,
-        .cut-line-v {
-            display: none; /* no middle cut lines */
         }
 
         .photo-slot {
@@ -62,7 +56,7 @@
         }
 
         .photo-slot:active { background: #f1f5f9; }
-        
+
         .photo-slot.active {
             box-shadow: inset 0 0 0 6px #3b82f6;
             z-index: 20;
@@ -70,7 +64,8 @@
 
         .photo-slot img {
             position: absolute;
-            top: 0; left: 0;
+            top: 0;
+            left: 0;
             transform-origin: center center;
             pointer-events: none;
             max-width: none !important;
@@ -79,9 +74,12 @@
         }
 
         .slot-placeholder {
-            position: absolute; inset: 0;
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
             color: #94a3b8;
             pointer-events: none;
             border: 1px dashed #e2e8f0;
@@ -92,27 +90,37 @@
         }
 
         .crop-modal {
-            position: fixed; inset: 0;
-            background: #000; z-index: 1000;
-            display: none; flex-direction: column;
+            position: fixed;
+            inset: 0;
+            background: #000;
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
         }
-        
+
         #cropWrapper {
             position: relative;
             transform-origin: center center;
             background: #111;
+            overflow: hidden;
+            flex-shrink: 0; /* 防止 Flexbox 挤压 */
         }
 
         #cropBox {
-            position: absolute; inset: 0;
+            position: absolute;
+            inset: 0;
             border: 2px solid #3b82f6;
-            box-shadow: 0 0 0 5000px rgba(0,0,0,0.8);
-            z-index: 20; pointer-events: none;
+            box-shadow: 0 0 0 5000px rgba(0, 0, 0, 0.8);
+            z-index: 20;
+            pointer-events: none;
         }
 
         #cropPreviewImg {
-            position: absolute; top: 0; left: 0;
-            cursor: move; touch-action: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            cursor: move;
+            touch-action: none;
             transform-origin: center center;
             max-width: none !important;
             max-height: none !important;
@@ -120,8 +128,9 @@
 
         #exportLoading {
             display: none;
-            position: fixed; inset: 0;
-            background: rgba(0,0,0,0.8);
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
             z-index: 2000;
             flex-direction: column;
             align-items: center;
@@ -133,14 +142,23 @@
             -webkit-appearance: none;
             background: transparent;
         }
+
         input[type=range]::-webkit-slider-runnable-track {
-            width: 100%; height: 6px; background: #333; border-radius: 3px;
+            width: 100%;
+            height: 6px;
+            background: #333;
+            border-radius: 3px;
         }
+
         input[type=range]::-webkit-slider-thumb {
             -webkit-appearance: none;
-            height: 24px; width: 24px; border-radius: 50%;
-            background: #3b82f6; cursor: pointer; margin-top: -9px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            margin-top: -9px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
         }
     </style>
 </head>
@@ -148,13 +166,12 @@
 
     <header class="bg-white/80 backdrop-blur-md sticky top-0 z-40 px-4 py-3 flex justify-between items-center border-b border-slate-200">
         <div class="flex flex-col">
-            <h1 class="text-sm font-bold text-slate-800">4x6满幅四联</h1>
+            <h1 class="text-sm font-bold text-slate-800">4x6 竖版双拼</h1>
             <div class="flex items-center gap-2">
-                <span class="text-[10px] text-slate-400">单张 3.0" × 2.0"</span>
                 <select id="exportQuality" class="text-[10px] bg-slate-100 border-none rounded px-1 font-bold text-blue-600 focus:ring-0">
                     <option value="1">预览 (600x900)</option>
-                    <option value="2">高清 (1200x1800 / 300DPI)</option>
-                    <option value="3" selected>超清 (1800x2700 / 450DPI)</option>
+                    <option value="2">高清 (300DPI)</option>
+                    <option value="3" selected>超清 (450DPI)</option>
                 </select>
             </div>
         </div>
@@ -165,9 +182,6 @@
     <main class="flex-1 canvas-viewport" onclick="deselectAll(event)">
         <div id="scaler" class="canvas-scaler">
             <div id="capture-area" class="photo-canvas">
-                <div class="cut-line-h"></div>
-                <div class="cut-line-v"></div>
-
                 <div class="photo-slot" style="top: 0; left: 0;" data-id="p1" onclick="selectSlot(this, event)">
                     <div class="slot-placeholder">
                         <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>
@@ -175,21 +189,7 @@
                     </div>
                     <img src="" alt="">
                 </div>
-                <div class="photo-slot" style="top: 0; left: 300px;" data-id="p2" onclick="selectSlot(this, event)">
-                    <div class="slot-placeholder">
-                        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>
-                        <span class="text-[10px] mt-1 uppercase font-bold tracking-tighter">添加照片</span>
-                    </div>
-                    <img src="" alt="">
-                </div>
-                <div class="photo-slot" style="top: 450px; left: 0;" data-id="p3" onclick="selectSlot(this, event)">
-                    <div class="slot-placeholder">
-                        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>
-                        <span class="text-[10px] mt-1 uppercase font-bold tracking-tighter">添加照片</span>
-                    </div>
-                    <img src="" alt="">
-                </div>
-                <div class="photo-slot" style="top: 450px; left: 300px;" data-id="p4" onclick="selectSlot(this, event)">
+                <div class="photo-slot" style="top: 450px; left: 0;" data-id="p2" onclick="selectSlot(this, event)">
                     <div class="slot-placeholder">
                         <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>
                         <span class="text-[10px] mt-1 uppercase font-bold tracking-tighter">添加照片</span>
@@ -249,7 +249,6 @@
         </div>
     </div>
 
-    <!-- margin modal -->
     <div id="marginModal" class="crop-modal">
         <div class="p-4 flex justify-between items-center bg-black/80 backdrop-blur safe-top">
             <button onclick="closeMarginModal()" class="text-white/40 text-sm px-2">取消</button>
@@ -259,11 +258,11 @@
         <div class="p-8 bg-zinc-950 safe-bottom">
             <div class="max-w-xs mx-auto space-y-8">
                 <div>
-                    <div class="flex justify-between text-[10px] text-zinc-500 font-black mb-3"><span>水平间距 (px)</span><span id="marginHLabel" class="text-blue-500">0</span></div>
+                    <div class="flex justify-between text-[10px] text-zinc-500 font-black mb-3"><span>水平边距 (px)</span><span id="marginHLabel" class="text-blue-500">0</span></div>
                     <input type="range" id="marginH" min="0" max="200" step="1" oninput="updateMarginPreview()" class="w-full">
                 </div>
                 <div>
-                    <div class="flex justify-between text-[10px] text-zinc-500 font-black mb-3"><span>垂直间距 (px)</span><span id="marginVLabel" class="text-blue-500">0</span></div>
+                    <div class="flex justify-between text-[10px] text-zinc-500 font-black mb-3"><span>垂直边距 (px)</span><span id="marginVLabel" class="text-blue-500">0</span></div>
                     <input type="range" id="marginV" min="0" max="200" step="1" oninput="updateMarginPreview()" class="w-full">
                 </div>
             </div>
@@ -273,7 +272,7 @@
     <div id="exportLoading">
         <div class="animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent mb-4"></div>
         <p class="text-sm font-medium">正在生成高清图片...</p>
-        <p class="text-[10px] text-zinc-400 mt-2">正在按照 300DPI 标准导出</p>
+        <p class="text-[10px] text-zinc-400 mt-2">正在按照高像素标准导出</p>
     </div>
 
     <input type="file" id="fileInput" accept="image/*" class="hidden" onchange="handleFile(event)">
@@ -281,86 +280,78 @@
     <script>
         let activeSlot = null;
         const photoStates = new Map();
-        // track natural image dimensions during cropping (used for clamping)
-        let cropNaturalW = 0, cropNaturalH = 0;
+        let cropNaturalW = 0;
+        let cropNaturalH = 0;
         let cropTemp = { x: 0, y: 0, scale: 1, rotate: 0, lastX: 0, lastY: 0, isDragging: false };
         let viewScale = 1;
+        let marginH = 0;
+        let marginV = 0;
 
-        // margins between photos, updated via modal
-        let marginH = 0; // horizontal spacing in px
-        let marginV = 0; // vertical spacing in px
-
-        function updateSlotPositions() {
-            const slots = document.querySelectorAll('.photo-slot');
-            // positions based on order p1,p2,p3,p4 with margins applied
-            // marginH/V are used for spacing between photos *and* along the
-            // outer edges so the exported canvas includes a white border.
-            // layout:
-            // p1: marginH, marginV
-            // p2: marginH + SLOT_W + marginH, marginV
-            // p3: marginH, marginV + SLOT_H + marginV
-            // p4: marginH + SLOT_W + marginH, marginV + SLOT_H + marginV
-            slots.forEach(slot => {
-                const id = slot.dataset.id;
-                let top = marginV;
-                let left = marginH;
-                if (id === 'p2' || id === 'p4') left = marginH + SLOT_W + marginH;
-                if (id === 'p3' || id === 'p4') top = marginV + SLOT_H + marginV;
-                slot.style.left = left + 'px';
-                slot.style.top = top + 'px';
-            });
-            updateCanvasSize();
-            updateCutLines();
-        }
-
-        const SLOT_W = 300;
+        const SLOT_W = 600;
         const SLOT_H = 450;
 
-        // whenever margins change we may need to grow the canvas so that the
-        // photos plus the outer white borders still fit.  Update the root
-        // variables used by CSS and also re-scale the viewport.
+        function updateSlotPositions() {
+            const p1 = document.querySelector('[data-id="p1"]');
+            const p2 = document.querySelector('[data-id="p2"]');
+            if (!p1 || !p2) return;
+
+            p1.style.left = `${marginH}px`;
+            p1.style.top = `${marginV}px`;
+            p2.style.left = `${marginH}px`;
+            p2.style.top = `${marginV + SLOT_H + marginV}px`;
+            updateCanvasSize();
+        }
+
         function updateCanvasSize() {
             const root = document.documentElement;
-            const newW = 2 * SLOT_W + marginH * 3;
-            const newH = 2 * SLOT_H + marginV * 3;
-            root.style.setProperty('--canvas-w', newW + 'px');
-            root.style.setProperty('--canvas-h', newH + 'px');
-            // re‑scale so viewport fits the new size
+            const newW = SLOT_W + marginH * 2;
+            const newH = SLOT_H * 2 + marginV * 3;
+            root.style.setProperty('--canvas-w', `${newW}px`);
+            root.style.setProperty('--canvas-h', `${newH}px`);
             autoScaleCanvas();
         }
 
-        // move the cut lines so they stay between the four slots rather than
-        // always at 50% of the (potentially enlarged) canvas.
-        function updateCutLines() {
-            const hLine = document.querySelector('.cut-line-h');
-            const vLine = document.querySelector('.cut-line-v');
-            const p1 = document.querySelector('[data-id="p1"]');
-            const p2 = document.querySelector('[data-id="p2"]');
-            const p3 = document.querySelector('[data-id="p3"]');
-            if (hLine && p1 && p3) {
-                const y1 = parseFloat(p1.style.top);
-                const y3 = parseFloat(p3.style.top);
-                hLine.style.top = (y1 + y3 + SLOT_H) / 2 + 'px';
+        function recalcCropViewScale() {
+            const viewport = document.getElementById('cropViewport');
+            const wrapper = document.getElementById('cropWrapper');
+            const rect = viewport.getBoundingClientRect();
+            let viewportW = rect.width - 24;
+            let viewportH = rect.height - 24;
+
+            if (viewportW < 200 || viewportH < 160) {
+                viewportW = window.innerWidth * 0.92;
+                viewportH = window.innerHeight * 0.56;
             }
-            if (vLine && p1 && p2) {
-                const x1 = parseFloat(p1.style.left);
-                const x2 = parseFloat(p2.style.left);
-                vLine.style.left = (x1 + x2 + SLOT_W) / 2 + 'px';
-            }
+
+            viewScale = Math.min(viewportW / SLOT_W, viewportH / SLOT_H, 1);
+            
+            // 修复1：直接设定尺寸，通过 CSS Transform 缩放 Wrapper
+            // 这样内部的 img 就不需要再乘以视口系数了，坐标系原汁原味
+            wrapper.style.width = `${SLOT_W}px`;
+            wrapper.style.height = `${SLOT_H}px`;
+            wrapper.style.transform = `scale(${viewScale})`;
+        }
+
+        function renderCropPreview() {
+            const preview = document.getElementById('cropPreviewImg');
+            // 修复1：不再使用 viewScale 污染坐标
+            preview.style.transform = `translate(${cropTemp.x}px, ${cropTemp.y}px) rotate(${cropTemp.rotate}deg) scale(${cropTemp.scale})`;
         }
 
         function autoScaleCanvas() {
             const container = document.querySelector('.canvas-viewport');
             const scaler = document.getElementById('scaler');
             const cw = container.clientWidth - 40;
-            const scale = Math.min(cw / 600, 1);
+            const captureArea = document.getElementById('capture-area');
+            const baseW = captureArea ? captureArea.offsetWidth : SLOT_W;
+            const scale = Math.min(cw / baseW, 1);
             scaler.style.transform = `scale(${scale})`;
         }
 
         window.addEventListener('resize', autoScaleCanvas);
         window.addEventListener('load', () => {
-            autoScaleCanvas();
             updateSlotPositions();
+            autoScaleCanvas();
         });
 
         function selectSlot(slot, e) {
@@ -368,24 +359,24 @@
             if (activeSlot) activeSlot.classList.remove('active');
             activeSlot = slot;
             activeSlot.classList.add('active');
-            
+
             const hasImg = photoStates.has(activeSlot.dataset.id);
-            document.getElementById('btnCrop').style.opacity = hasImg ? "1" : "0.3";
-            document.getElementById('btnCrop').style.pointerEvents = hasImg ? "auto" : "none";
-            document.getElementById('toolbar').style.transform = "translateY(0)";
+            document.getElementById('btnCrop').style.opacity = hasImg ? '1' : '0.3';
+            document.getElementById('btnCrop').style.pointerEvents = hasImg ? 'auto' : 'none';
+            document.getElementById('toolbar').style.transform = 'translateY(0)';
         }
 
         function deselectAll(e) {
             if (e.target.id === 'capture-area' || e.target.classList.contains('canvas-viewport')) {
                 if (activeSlot) activeSlot.classList.remove('active');
                 activeSlot = null;
-                document.getElementById('toolbar').style.transform = "translateY(100%)";
+                document.getElementById('toolbar').style.transform = 'translateY(100%)';
             }
         }
 
-        function triggerUpload() { 
-            document.getElementById('fileInput').value = ''; 
-            document.getElementById('fileInput').click(); 
+        function triggerUpload() {
+            document.getElementById('fileInput').value = '';
+            document.getElementById('fileInput').click();
         }
 
         function clearSlot() {
@@ -393,9 +384,9 @@
             const id = activeSlot.dataset.id;
             const img = activeSlot.querySelector('img');
             const placeholder = activeSlot.querySelector('.slot-placeholder');
-            img.src = "";
-            img.style.display = "none";
-            placeholder.style.display = "flex";
+            img.src = '';
+            img.style.display = 'none';
+            placeholder.style.display = 'flex';
             photoStates.delete(id);
             deselectAll({ target: document.querySelector('.canvas-viewport') });
         }
@@ -408,8 +399,8 @@
                 const img = activeSlot.querySelector('img');
                 const placeholder = activeSlot.querySelector('.slot-placeholder');
                 img.src = e.target.result;
-                img.style.display = "block";
-                placeholder.style.display = "none";
+                img.style.display = 'block';
+                placeholder.style.display = 'none';
                 img.onload = () => {
                     const fitScale = Math.max(SLOT_W / img.naturalWidth, SLOT_H / img.naturalHeight);
                     const state = {
@@ -420,8 +411,8 @@
                     };
                     photoStates.set(activeSlot.dataset.id, state);
                     img.style.transform = `translate(${state.x}px, ${state.y}px) rotate(${state.rotate}deg) scale(${state.scale})`;
-                    document.getElementById('btnCrop').style.opacity = "1";
-                    document.getElementById('btnCrop').style.pointerEvents = "auto";
+                    document.getElementById('btnCrop').style.opacity = '1';
+                    document.getElementById('btnCrop').style.pointerEvents = 'auto';
                 };
             };
             reader.readAsDataURL(file);
@@ -434,31 +425,24 @@
             const state = photoStates.get(activeSlot.dataset.id);
             const modal = document.getElementById('cropModal');
             const preview = document.getElementById('cropPreviewImg');
-            const wrapper = document.getElementById('cropWrapper');
 
-            // keep natural dimensions for clamping calculations
             cropNaturalW = img.naturalWidth;
             cropNaturalH = img.naturalHeight;
 
+            modal.style.display = 'flex';
             preview.src = img.src;
-            wrapper.style.width = SLOT_W + 'px';
-            wrapper.style.height = SLOT_H + 'px';
-            const screenW = window.innerWidth * 0.85;
-            const screenH = window.innerHeight * 0.55;
-            viewScale = Math.min(screenW / SLOT_W, screenH / SLOT_H);
-            wrapper.style.transform = `scale(${viewScale})`;
             cropTemp = { ...state, isDragging: false };
             const zoomSlider = document.getElementById('cropZoom');
-            // slider bounds will be updated when clampCropPosition runs
             zoomSlider.min = (cropTemp.scale * 0.1).toFixed(4);
             zoomSlider.max = (cropTemp.scale * 10).toFixed(4);
             zoomSlider.value = cropTemp.scale;
             document.getElementById('cropRotate').value = cropTemp.rotate || 0;
-            updateCropTransform();
-            modal.style.display = 'flex';
+            requestAnimationFrame(() => {
+                recalcCropViewScale();
+                updateCropTransform();
+            });
         }
 
-        // margin modal controls
         function openMarginModal() {
             const modal = document.getElementById('marginModal');
             document.getElementById('marginH').value = marginH;
@@ -468,7 +452,9 @@
             modal.style.display = 'flex';
         }
 
-        function closeMarginModal() { document.getElementById('marginModal').style.display = 'none'; }
+        function closeMarginModal() {
+            document.getElementById('marginModal').style.display = 'none';
+        }
 
         function updateMarginPreview() {
             const h = parseInt(document.getElementById('marginH').value, 10) || 0;
@@ -487,7 +473,7 @@
         function updateCropTransform() {
             const newScale = parseFloat(document.getElementById('cropZoom').value);
             const oldScale = cropTemp.scale;
-            const newRotate = parseInt(document.getElementById('cropRotate').value) || 0;
+            const newRotate = parseInt(document.getElementById('cropRotate').value, 10) || 0;
             const imgRef = activeSlot.querySelector('img');
             if (oldScale !== newScale && imgRef) {
                 const cx = SLOT_W / 2;
@@ -502,14 +488,12 @@
             }
             cropTemp.rotate = newRotate;
 
-            // enforce constraints and adjust slider range
             clampCropPosition();
 
             const baseScale = photoStates.get(activeSlot.dataset.id)?.scale || 1;
             document.getElementById('zoomLabel').innerText = (cropTemp.scale / baseScale).toFixed(1) + 'X';
             document.getElementById('rotateLabel').innerText = cropTemp.rotate + '°';
-            const preview = document.getElementById('cropPreviewImg');
-            preview.style.transform = `translate(${cropTemp.x}px, ${cropTemp.y}px) rotate(${cropTemp.rotate}deg) scale(${cropTemp.scale})`;
+            renderCropPreview();
         }
 
         function applyCrop() {
@@ -520,7 +504,17 @@
             closeCropModal();
         }
 
-        function closeCropModal() { document.getElementById('cropModal').style.display = 'none'; }
+        function closeCropModal() {
+            document.getElementById('cropModal').style.display = 'none';
+        }
+
+        window.addEventListener('resize', () => {
+            const modal = document.getElementById('cropModal');
+            if (modal.style.display === 'flex') {
+                recalcCropViewScale();
+                renderCropPreview();
+            }
+        });
 
         function onStart(e) {
             if (e.target.id === 'cropPreviewImg') {
@@ -530,6 +524,7 @@
                 cropTemp.lastY = t.clientY;
             }
         }
+
         function onMove(e) {
             if (cropTemp.isDragging) {
                 const t = e.touches ? e.touches[0] : e;
@@ -537,30 +532,31 @@
                 cropTemp.y += (t.clientY - cropTemp.lastY) / viewScale;
                 cropTemp.lastX = t.clientX;
                 cropTemp.lastY = t.clientY;
-                const preview = document.getElementById('cropPreviewImg');
-                preview.style.transform = `translate(${cropTemp.x}px, ${cropTemp.y}px) rotate(${cropTemp.rotate}deg) scale(${cropTemp.scale})`;
+                renderCropPreview();
                 e.preventDefault();
             }
         }
+
         function onEnd() {
             if (cropTemp.isDragging) {
                 cropTemp.isDragging = false;
                 clampCropPosition();
                 const preview = document.getElementById('cropPreviewImg');
                 preview.style.transition = 'transform 0.25s ease';
-                preview.style.transform = `translate(${cropTemp.x}px, ${cropTemp.y}px) rotate(${cropTemp.rotate}deg) scale(${cropTemp.scale})`;
-                setTimeout(() => { preview.style.transition = ''; }, 300);
+                renderCropPreview();
+                setTimeout(() => {
+                    preview.style.transition = '';
+                }, 300);
             }
         }
 
         document.addEventListener('mousedown', onStart);
         document.addEventListener('mousemove', onMove);
         document.addEventListener('mouseup', onEnd);
-        document.addEventListener('touchstart', onStart, {passive: false});
-        document.addEventListener('touchmove', onMove, {passive: false});
+        document.addEventListener('touchstart', onStart, { passive: false });
+        document.addEventListener('touchmove', onMove, { passive: false });
         document.addEventListener('touchend', onEnd);
 
-        // clamp helper copied from 6_4_inch.html
         function clampCropPosition() {
             if (!cropNaturalW || !activeSlot) return;
             const imgW = cropNaturalW;
@@ -577,13 +573,12 @@
                 cropH / (imgW * sinR + imgH * cosR)
             );
 
-            // enforce minimum scale and update slider
             if (cropTemp.scale < minScale) {
                 cropTemp.scale = minScale;
                 const slider = document.getElementById('cropZoom');
                 if (parseFloat(slider.min) > minScale) slider.min = minScale.toFixed(4);
                 slider.value = minScale;
-                document.getElementById('zoomLabel').innerText = (cropTemp.scale / (photoStates.get(activeSlot.dataset.id)?.scale||1)).toFixed(1) + 'X';
+                document.getElementById('zoomLabel').innerText = (cropTemp.scale / (photoStates.get(activeSlot.dataset.id)?.scale || 1)).toFixed(1) + 'X';
             }
 
             const s = cropTemp.scale;
@@ -592,6 +587,7 @@
             const halfW = (sw * cosR + sh * sinR) / 2;
             const halfH = (sw * sinR + sh * cosR) / 2;
 
+            // 修复2：重写平移边界（Clamp）计算公式，加入图片的原始尺寸偏移
             const xMin = cropW - halfW - imgW / 2;
             const xMax = halfW - imgW / 2;
             const yMin = cropH - halfH - imgH / 2;
@@ -605,35 +601,35 @@
             const area = document.getElementById('capture-area');
             const loading = document.getElementById('exportLoading');
             const qualityScale = parseFloat(document.getElementById('exportQuality').value);
-            
+
             loading.style.display = 'flex';
             const prevActive = activeSlot;
             if (activeSlot) activeSlot.classList.remove('active');
-            
+
             setTimeout(async () => {
                 try {
                     const scaler = document.getElementById('scaler');
                     const originalTransform = scaler.style.transform;
                     scaler.style.transform = 'scale(1)';
-                    
-                    const canvas = await html2canvas(area, { 
-                        scale: qualityScale, 
+
+                    const canvas = await html2canvas(area, {
+                        scale: qualityScale,
                         useCORS: true,
                         logging: false,
                         backgroundColor: '#ffffff'
                     });
-                    
+
                     scaler.style.transform = originalTransform;
-                    
+
                     const link = document.createElement('a');
                     const timestamp = new Date().getTime();
-                    link.download = `Photo_4x6_${1200 * (qualityScale/2)}x${1800 * (qualityScale/2)}.jpg`;
+                    link.download = `Photo_4x6_vertical_2up_${timestamp}.jpg`;
                     link.href = canvas.toDataURL('image/jpeg', 0.95);
                     link.click();
-                } catch (err) { 
+                } catch (err) {
                     console.error(err);
-                    alert("生成失败，请尝试降低导出画质");
-                } finally { 
+                    alert('生成失败，请尝试降低导出画质');
+                } finally {
                     if (prevActive) prevActive.classList.add('active');
                     loading.style.display = 'none';
                 }
