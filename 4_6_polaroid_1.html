@@ -319,25 +319,37 @@
     let cropNaturalW = 0, cropNaturalH = 0, viewScale = 1;
     let cropTemp = { x: 0, y: 0, scale: 1, rotate: 0, lastX: 0, lastY: 0, isDragging: false };
 
-    function updateCardGeometry(v = marginVValue) {
+    // 统一的布局计算函数，强制锁定 2:3 比例
+    function updateLayout(h = marginHValue, v = marginVValue) {
       const root = document.documentElement;
-      const cardH = Math.max(640, Math.min(820, 840 - v));
-      const captionSpace = Math.max(110, Math.min(170, 170 - Math.floor(v * 0.5)));
-      const captionMinH = Math.max(74, captionSpace - 28);
+      
+      // 1. 核心修复：强制总画布宽高的绝对 2:3 比例 (宽1 : 高1.5)
+      const canvasW = 460 + h * 2;
+      const canvasH = canvasW * 1.5; 
+      
+      // 2. 根据画布总高和垂直边距，反推卡片内部的高度
+      const cardH = canvasH - v * 2;
+      
+      // 3. 动态计算文字区的高度 (约占卡片高度的 18%)
+      const captionSpace = Math.max(90, Math.floor(cardH * 0.18));
+      const captionMinH = Math.max(64, captionSpace - 28);
+      
+      // 4. 更新全局相框尺寸（给裁剪功能使用）
+      frameW = 432; // 卡片宽460 - 左右内边距28
       frameH = cardH - 14 - captionSpace;
+      
+      // 5. 应用到 CSS 变量
+      root.style.setProperty("--canvas-w", `${canvasW}px`);
+      root.style.setProperty("--canvas-h", `${canvasH}px`);
       root.style.setProperty("--card-h", `${cardH}px`);
       root.style.setProperty("--caption-space", `${captionSpace}px`);
       root.style.setProperty("--caption-min-h", `${captionMinH}px`);
-    }
-    function updateCardLayout(h = marginHValue, v = marginVValue) {
+      
+      // 6. 居中定位拍立得卡片
       const card = document.getElementById("card1");
       card.style.left = `${h}px`;
       card.style.top = `${v}px`;
-    }
-    function updateCanvasSize(h = marginHValue, v = marginVValue) {
-      const cardH = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--card-h"), 10) || 720;
-      document.documentElement.style.setProperty("--canvas-w", `${460 + h * 2}px`);
-      document.documentElement.style.setProperty("--canvas-h", `${cardH + v * 2}px`);
+      
       autoScaleCanvas();
     }
     function openMarginModal() {
@@ -347,16 +359,25 @@
       marginHLabel.innerText = previewMarginH; marginVLabel.innerText = previewMarginV;
       marginModal.style.display = "flex";
     }
-    function closeMarginModal() { updateCardLayout(marginHValue, marginVValue); updateCanvasSize(marginHValue, marginVValue); marginModal.style.display = "none"; }
+    function closeMarginModal() { 
+      updateLayout(marginHValue, marginVValue); 
+      marginModal.style.display = "none"; 
+    }
+
     function updateMarginPreview() {
       previewMarginH = parseInt(document.getElementById("marginH").value, 10) || 0;
       previewMarginV = parseInt(document.getElementById("marginV").value, 10) || 0;
-      marginHLabel.innerText = previewMarginH; marginVLabel.innerText = previewMarginV;
-      updateCardGeometry(previewMarginV); updateCardLayout(previewMarginH, previewMarginV); updateCanvasSize(previewMarginH, previewMarginV);
+      marginHLabel.innerText = previewMarginH; 
+      marginVLabel.innerText = previewMarginV;
+      // 预览时实时更新布局，严格保持 2:3
+      updateLayout(previewMarginH, previewMarginV); 
     }
+
     function applyMargin() {
-      marginHValue = previewMarginH; marginVValue = previewMarginV;
-      updateCardGeometry(marginVValue); updateCardLayout(); updateCanvasSize(); closeMarginModal();
+      marginHValue = previewMarginH; 
+      marginVValue = previewMarginV;
+      updateLayout(marginHValue, marginVValue); 
+      closeMarginModal();
     }
 
     function autoScaleCanvas() {
@@ -555,7 +576,14 @@
     }
 
     window.addEventListener("resize", () => { autoScaleCanvas(); if (cropModal.style.display === "flex") { recalcCropViewScale(); renderCropPreview(); } });
-    window.addEventListener("load", () => { renderFontMenus(); updateCardGeometry(marginVValue); updateCardLayout(); updateCanvasSize(); syncControls(); renderCaption(); autoScaleCanvas(); });
+    window.addEventListener("load", () => { 
+      renderFontMenus(); 
+      // 用 updateLayout() 替换掉旧的三个初始化函数
+      updateLayout(); 
+      syncControls(); 
+      renderCaption(); 
+      autoScaleCanvas(); 
+    });
     document.addEventListener("click", closeFontMenus);
     document.addEventListener("mousedown", onStart); document.addEventListener("mousemove", onMove); document.addEventListener("mouseup", onEnd);
     document.addEventListener("touchstart", onStart, { passive: false }); document.addEventListener("touchmove", onMove, { passive: false }); document.addEventListener("touchend", onEnd);
