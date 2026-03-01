@@ -124,9 +124,9 @@
       <h1 class="text-sm font-bold text-slate-800">6寸拍立得（两张照片）</h1>
       <div class="flex items-center gap-2 mt-0.5">
         <select id="exportQuality" class="text-[10px] bg-slate-100 border-none rounded px-1 py-0.5 font-bold text-blue-600 focus:ring-0">
-          <option value="300">标清 (1200x1800 / 300DPI)</option>
-          <option value="450" selected>高清 (1800x2700 / 450DPI)</option>
-          <option value="600">超清 (2400x3600 / 600DPI)</option>
+          <option value="300">标清 (1800x1200 / 300DPI)</option>
+          <option value="450" selected>高清 (2700x1800 / 450DPI)</option>
+          <option value="600">超清 (3600x2400 / 600DPI)</option>
         </select>
       </div>
     </div>
@@ -584,7 +584,7 @@
       const area = document.getElementById("captureArea");
       const originalWidth = area.offsetWidth;
       const originalHeight = area.offsetHeight;
-      const qualityScale = parseFloat(document.getElementById("exportQuality").value) * 4 / originalWidth;
+      const qualityScale = parseFloat(document.getElementById("exportQuality").value) * 6 / originalWidth;
 
       loading.style.display = "flex";
 
